@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>자동 영상 제작</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg">
+  <meta name="theme-color" content="#ff5a1f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="/icon.svg">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top"><div class="in">
+  <a class="brand" href="/">🎬 자동 영상 제작</a><span class="sp"></span>
+  <button class="small ghost" id="pushBtn">🔔 알림 켜기</button>
+</div></header>
+<main>
+  <div id="modeNotice"></div>
+
+  <section class="card" id="uploadCard">
+    <h1>사진·영상 올리기</h1>
+    <div class="drop">
+      <div class="row">
+        <label class="btn primary" for="pick">📁 사진·영상 고르기</label>
+        <label class="btn" for="cam">📷 바로 찍기</label>
+      </div>
+      <input id="pick" type="file" accept="image/*,video/*" multiple hidden>
+      <input id="cam" type="file" accept="image/*,video/*" capture="environment" hidden>
+      <p class="muted" style="margin:10px 0 0">여러 개를 한 번에 골라도 돼요. 가격표·간판·메뉴판·행사 안내판도 찍어 두면 AI가 읽어요.</p>
+    </div>
+    <div class="thumbs" id="thumbs"></div>
+
+    <label class="f">어떤 곳인가요?</label>
+    <div class="chips" id="cats"></div>
+
+    <label class="f" for="placeName">장소 이름 (선택)</label>
+    <input id="placeName" type="text" placeholder="예: 행복마트 역삼점, 소문난 국밥집, 올림픽공원 장미축제">
+
+    <label class="f" for="memo">메모 (선택)</label>
+    <textarea id="memo" placeholder="예: 토요일 10시~18시 행사, 주차 가능, 대표 메뉴는 순대국 9,000원"></textarea>
+
+    <div id="upProg" class="hidden" style="margin-top:14px">
+      <div class="bar"><i id="upBar"></i></div>
+      <p class="muted" id="upText" style="margin:6px 0 0"></p>
+    </div>
+    <div class="actions"><button class="primary big" id="go" disabled>영상과 글 만들기</button></div>
+  </section>
+
+  <section class="card">
+    <h2>내 작업</h2>
+    <div class="list" id="list"><p class="muted">불러오는 중…</p></div>
+  </section>
+</main>
+<script type="module">
+import { api, $, h, toast, STATUS, APPROVAL, pill, fmtDate, enablePush } from '/common.js';
+
+let status;
+let files = [];
+
+async function init() {
+  status = await api('/api/status');
+  if (!status.authed) { const { showLogin } = await import('/common.js'); return showLogin(); }
+
+  const f = status.features;
+  const missing = [];
+  if (!f.ai) missing.push('AI 분석(예시 글로 대신 만들어져요)');
+  if (!f.voice) missing.push('AI 나레이션(자막만 나와요)');
+  if (!f.aiMusic) missing.push('AI 배경음악(임시 음악 사용)');
+  if (missing.length) {
+    $('#modeNotice').replaceChildren(h('div', { class: 'notice warn' },
+      h('b', {}, '테스트 모드'), ' · API 키를 넣기 전이라 꺼진 기능: ', missing.join(', ')));
+  }
+
+  const cats = [['auto', '자동 판단'], ...Object.entries(status.categories)];
+  $('#cats').replaceChildren(...cats.flatMap(([k, v], i) => [
+    h('input', { type: 'radio', name: 'cat', id: `c_${k}`, value: k, checked: i === 0 }),
+    h('label', { for: `c_${k}` }, v),
+  ]));
+  loadList();
+}
+
+function renderThumbs() {
+  $('#thumbs').replaceChildren(...files.map((f, i) => {
+    const url = URL.createObjectURL(f);
+    const media = f.type.startsWith('video')
+      ? h('video', { src: url, muted: true, playsinline: true, preload: 'metadata' })
+      : h('img', { src: url, alt: '' });
+    return h('div', { class: 't' }, media,
+      f.type.startsWith('video') ? h('span', { class: 'badge' }, '영상') : null,
+      h('button', { class: 'x', title: '빼기', onclick: () => { files.splice(i, 1); renderThumbs(); } }, '✕'));
+  }));
+  $('#go').disabled = files.length === 0;
+  $('#go').textContent = files.length ? `${files.length}개로 영상과 글 만들기` : '영상과 글 만들기';
+}
+for (const id of ['#pick', '#cam']) {
+  $(id).addEventListener('change', (e) => {
+    files.push(...e.target.files);
+    e.target.value = '';
+    renderThumbs();
+  });
+}
+
+$('#go').addEventListener('click', () => {
+  const fd = new FormData();
+  for (const f of files) fd.append('files', f, f.name);
+  fd.append('category', document.querySelector('input[name=cat]:checked')?.value || 'auto');
+  fd.append('placeName', $('#placeName').value);
+  fd.append('memo', $('#memo').value);
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/projects');
+  $('#go').disabled = true;
+  $('#upProg').classList.remove('hidden');
+  xhr.upload.onprogress = (e) => {
+    if (!e.lengthComputable) return;
+    const pct = Math.round((e.loaded / e.total) * 100);
+    $('#upBar').style.width = `${pct}%`;
+    $('#upText').textContent = `올리는 중 ${pct}% (${(e.loaded / 1e6).toFixed(1)} / ${(e.total / 1e6).toFixed(1)}MB)`;
+  };
+  xhr.onload = () => {
+    let data = {};
+    try { data = JSON.parse(xhr.responseText); } catch {}
+    if (xhr.status === 200) location.href = `/project.html?id=${data.id}`;
+    else { toast(data.error || '업로드 실패'); $('#go').disabled = false; }
+  };
+  xhr.onerror = () => { toast('네트워크 오류로 업로드 실패'); $('#go').disabled = false; };
+  xhr.send(fd);
+});
+
+async function loadList() {
+  const list = await api('/api/projects');
+  if (!list.length) return $('#list').replaceChildren(h('p', { class: 'muted' }, '아직 만든 게 없어요.'));
+  $('#list').replaceChildren(...list.map((p) => {
+    const approved = Object.values(p.approvals).filter((a) => a === 'approved').length;
+    const total = Object.keys(p.approvals).length;
+    return h('a', { class: 'item', href: `/project.html?id=${p.id}` },
+      p.thumb ? h('img', { class: 'th', src: p.thumb, alt: '' }) : h('div', { class: 'th' }),
+      h('div', { class: 'grow' },
+        h('div', {}, h('b', {}, p.placeName || '이름 없는 장소'), ' ', h('span', { class: 'muted' }, `· ${p.mediaCount}개`)),
+        h('div', { class: 'muted' }, fmtDate(p.createdAt),
+          p.status === 'processing' ? ` · ${p.step} ${Math.round(p.progress * 100)}%` : '',
+          p.status === 'ready' ? ` · 승인 ${approved}/${total}` : '')),
+      pill(STATUS[p.status] || [p.status, '']));
+  }));
+  if (list.some((p) => ['processing', 'queued'].includes(p.status))) setTimeout(loadList, 4000);
+}
+
+$('#pushBtn').addEventListener('click', async () => {
+  try {
+    await enablePush(status.vapidPublicKey);
+    await api('/api/push/test', { method: 'POST' });
+    toast('알림을 켰어요. 테스트 알림을 보냈어요.');
+  } catch (e) { toast(e.message); }
+});
+
+init().catch((e) => toast(e.message));
+</script>
+</body>
+</html>

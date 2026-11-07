@@ -1,0 +1,25 @@
+{
+  "name": "cloude-video",
+  "version": "0.1.0",
+  "private": true,
+  "description": "폰으로 찍은 사진·영상으로 쇼츠, 롱폼, 릴스, 쓰레드 글, 블로그 글을 자동으로 만드는 웹앱",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "sample": "node scripts/make-samples.js",
+    "test:pipeline": "node scripts/test-pipeline.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.6.0",
+    "dotenv": "^18.0.9",
+    "express": "^4.22.3",
+    "multer": "^2.5.0",
+    "web-push": "^4.0.0",
+    "zod": "^4.6.7"
+  }
+}

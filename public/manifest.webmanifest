@@ -1,0 +1,9 @@
+{
+  "name": "자동 영상 제작",
+  "short_name": "영상제작",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f6f4",
+  "theme_color": "#ff5a1f",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

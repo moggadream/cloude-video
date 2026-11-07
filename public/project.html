@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>결과 확인</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg">
+  <meta name="theme-color" content="#ff5a1f">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top"><div class="in">
+  <a class="brand" href="/">← 내 작업</a><span class="sp"></span>
+  <span id="headPill"></span>
+</div></header>
+<main>
+  <section class="card" id="statusCard"></section>
+  <section class="card hidden" id="summaryCard"></section>
+  <div id="outputsWrap" class="hidden">
+    <div class="tabs" id="tabs"></div>
+    <section class="card" id="panel"></section>
+  </div>
+  <div class="actions"><button class="small ghost" id="delBtn">🗑 이 작업 지우기</button></div>
+</main>
+<script type="module">
+import { api, $, h, toast, copyText, STATUS, APPROVAL, pill, showLogin } from '/common.js';
+
+const id = new URLSearchParams(location.search).get('id');
+const KEYS = ['shorts', 'longform', 'reels', 'threads', 'blog'];
+const VIDEO = new Set(['shorts', 'reels', 'longform']);
+let status, project, current = 'shorts', dirty = false, sig = '';
+
+const file = (area, name) => `/files/${id}/${area}/${name}`;
+const mediaThumb = (m) => file('work', m.kind === 'image' ? m.normalized : (m.frames?.[1] || m.frames?.[0])?.file);
+
+async function load() {
+  project = await api(`/api/projects/${id}`);
+  renderStatus();
+  const newSig = JSON.stringify([project.status, Object.entries(project.outputs || {}).map(([k, o]) => [k, o.status, o.version, o.approval, o.publish?.status])]);
+  if (newSig !== sig && !dirty) {
+    sig = newSig;
+    renderSummary();
+    renderTabs();
+    renderPanel();
+  }
+  const busy = ['queued', 'processing'].includes(project.status) ||
+    Object.values(project.outputs || {}).some((o) => ['queued', 'rendering'].includes(o.status));
+  if (busy) setTimeout(() => load().catch(() => {}), 2500);
+}
+
+function renderStatus() {
+  $('#headPill').replaceChildren(pill(STATUS[project.status] || [project.status, '']));
+  const c = $('#statusCard');
+  if (project.status === 'ready') {
+    const approved = Object.values(project.outputs).filter((o) => o.approval === 'approved').length;
+    c.replaceChildren(
+      h('h1', { style: 'margin:0 0 4px' }, project.plan?.place_name || project.hints?.placeName || '완성된 결과물'),
+      h('p', { class: 'muted', style: 'margin:0' }, `결과물 5개 중 ${approved}개 승인됨. 하나씩 확인하고 승인해 주세요.`));
+  } else if (project.status === 'failed') {
+    c.replaceChildren(
+      h('h2', {}, '제작에 실패했어요'),
+      h('p', { class: 'muted' }, project.error || ''),
+      h('button', { class: 'primary', onclick: async () => { await api(`/api/projects/${id}/retry`, { method: 'POST' }); sig = ''; load(); } }, '다시 만들기'));
+  } else {
+    c.replaceChildren(
+      h('h2', {}, '만드는 중이에요'),
+      h('div', { class: 'bar' }, h('i', { style: `width:${Math.round((project.progress || 0) * 100)}%` })),
+      h('p', { class: 'muted', style: 'margin:8px 0 0' }, `${project.step || '준비 중'} · ${Math.round((project.progress || 0) * 100)}%`),
+      h('p', { class: 'muted', style: 'margin:4px 0 0' }, '이 화면을 닫아도 계속 만들어져요. 다 되면 알림을 보내드려요.'));
+  }
+}
+
+function renderSummary() {
+  const p = project.plan;
+  const card = $('#summaryCard');
+  if (!p) return card.classList.add('hidden');
+  card.classList.remove('hidden');
+  card.replaceChildren(
+    h('details', {},
+      h('summary', {}, `AI 분석 결과 · ${status.categories[p.category] || p.category}`),
+      p._source === 'mock' ? h('div', { class: 'notice warn', style: 'margin-top:10px' }, 'API 키가 없어 예시 글로 만들었어요. 키를 넣으면 사진 내용을 보고 진짜 글이 써져요.') : null,
+      h('p', {}, p.summary),
+      h('div', {}, ...p.media_notes.map((n) => h('p', { class: 'muted' },
+        h('b', {}, n.media_id), ` ${n.description}`,
+        n.items?.length ? ` · ${n.items.map((i) => `${i.name}${i.price ? ` ${i.price}` : ''}`).join(', ')}` : '')))));
+}
+
+function renderTabs() {
+  if (!project.outputs || !Object.keys(project.outputs).length) return $('#outputsWrap').classList.add('hidden');
+  $('#outputsWrap').classList.remove('hidden');
+  $('#tabs').replaceChildren(...KEYS.map((k) => {
+    const o = project.outputs[k];
+    const mark = o.approval === 'approved' ? ' ✅' : o.approval === 'rejected' ? ' ⏸' : o.status === 'rendering' || o.status === 'queued' ? ' ⏳' : '';
+    return h('button', { class: `small ${k === current ? 'on' : ''}`, onclick: () => { if (dirty && !confirm('저장하지 않은 수정이 있어요. 이동할까요?')) return; dirty = false; current = k; renderTabs(); renderPanel(); } }, status.outputLabels[k] + mark);
+  }));
+}
+
+function approvalBlock(k, o) {
+  const plat = status.platforms[k];
+  return h('div', { class: 'notice' },
+    h('div', { class: 'row' }, h('b', {}, '상태'), pill(APPROVAL[o.approval] || [o.approval, ''])),
+    o.publish?.message ? h('div', { class: 'muted', style: 'margin-top:6px' }, o.publish.message) : null,
+    o.publish?.url ? h('div', {}, h('a', { href: o.publish.url, target: '_blank' }, '게시물 보기')) : null,
+    !o.publish ? h('div', { class: 'muted', style: 'margin-top:6px' }, plat.note) : null);
+}
+
+function approveButtons(k, o) {
+  const ready = o.status === 'ready';
+  if (o.approval === 'approved') {
+    return [h('button', { class: 'small ghost', onclick: () => act(k, 'reset') }, '승인 취소')];
+  }
+  return [
+    h('button', { class: 'ok', disabled: !ready, onclick: async () => {
+      if (dirty) await saveText(k);
+      await act(k, 'approve');
+    } }, '✅ 승인하고 올리기'),
+    o.approval !== 'rejected' ? h('button', { onclick: () => act(k, 'reject') }, '⏸ 보류') : null,
+  ];
+}
+
+async function act(k, action) {
+  try {
+    await api(`/api/projects/${id}/outputs/${k}/${action}`, { method: 'POST' });
+    toast({ approve: '승인했어요', reject: '보류했어요', reset: '승인을 취소했어요' }[action]);
+    sig = ''; dirty = false; await load();
+  } catch (e) { toast(e.message); }
+}
+
+async function saveText(k) {
+  const title = $('#f_title')?.value;
+  const body = $('#f_body')?.value;
+  await api(`/api/projects/${id}/outputs/${k}`, { method: 'PATCH', json: { title, body } });
+  project.outputs[k] = { ...project.outputs[k], title: title ?? project.outputs[k].title, body };
+  dirty = false;
+  toast('저장했어요');
+}
+
+function textFields(k, o, { title = true, limit } = {}) {
+  const count = h('span', { class: 'muted' });
+  const body = h('textarea', { id: 'f_body', rows: k === 'blog' ? 16 : 7, oninput: () => { dirty = true; upd(); if (k === 'blog') renderBlogPreview(); } }, o.body || '');
+  const upd = () => { count.textContent = `${body.value.length}자${limit ? ` / ${limit}자` : ''}`; count.style.color = limit && body.value.length > limit ? 'var(--bad)' : ''; };
+  upd();
+  return [
+    title ? h('label', { class: 'f', for: 'f_title' }, '제목') : null,
+    title ? h('input', { type: 'text', id: 'f_title', value: o.title || '', oninput: () => { dirty = true; } }) : null,
+    h('label', { class: 'f', for: 'f_body' }, k === 'reels' ? '캡션' : k === 'threads' ? '글' : k === 'blog' ? '본문 ([사진: m1] 자리에 사진이 들어가요)' : '설명'),
+    body,
+    h('div', { class: 'row', style: 'justify-content:space-between;margin-top:6px' }, count,
+      h('button', { class: 'small', onclick: () => saveText(k).catch((e) => toast(e.message)) }, '💾 저장')),
+  ];
+}
+
+function renderPanel() {
+  const k = current;
+  const o = project.outputs?.[k];
+  const el = $('#panel');
+  const panel = { replaceChildren: (...kids) => el.replaceChildren(...kids.flat().filter((x) => x !== null && x !== undefined && x !== false)) };
+  if (!o) return panel.replaceChildren();
+
+  if (VIDEO.has(k)) {
+    const v = o.video;
+    const busy = o.status === 'queued' || o.status === 'rendering';
+    panel.replaceChildren(
+      h('h2', {}, status.outputLabels[k]),
+      busy ? h('div', { class: 'notice' }, '⏳ 영상을 만드는 중이에요…') : null,
+      o.status === 'failed' ? h('div', { class: 'notice warn' }, `영상 제작 실패: ${o.error || ''}`) : null,
+      v ? h('div', { class: `player ${v.height > v.width ? 'v' : ''}` },
+        h('video', { src: `${file('out', v.file)}?v=${o.version}`, controls: true, playsinline: true, preload: 'metadata', poster: `${file('out', v.thumb)}?v=${o.version}` })) : null,
+      v ? h('p', { class: 'muted' }, `${Math.floor(v.duration / 60)}분 ${Math.round(v.duration % 60)}초 · ${v.width}×${v.height} · 나레이션 ${v.voice ? '있음' : '없음(키 필요)'} · 음악 ${v.music === 'ai' ? 'AI 작곡' : '임시 음악'}`) : null,
+      approvalBlock(k, o),
+      ...textFields(k, o, { title: k !== 'reels', limit: k === 'reels' ? 2200 : 5000 }),
+      h('div', { class: 'actions' },
+        ...approveButtons(k, o),
+        v ? h('a', { class: 'btn', href: file('out', v.file), download: `${k}.mp4` }, '⬇ 영상 받기') : null,
+        h('button', { onclick: () => copyText([o.title, $('#f_body').value].filter(Boolean).join('\n\n')) }, '📋 글 복사')),
+      sceneEditor(k));
+  } else if (k === 'threads') {
+    panel.replaceChildren(
+      h('h2', {}, '쓰레드 글'),
+      approvalBlock(k, o),
+      ...textFields(k, o, { title: false, limit: 500 }),
+      h('div', { class: 'actions' }, ...approveButtons(k, o),
+        h('button', { onclick: () => copyText($('#f_body').value) }, '📋 복사')));
+  } else if (k === 'blog') {
+    panel.replaceChildren(
+      h('h2', {}, '블로그 글'),
+      approvalBlock(k, o),
+      ...textFields(k, o, { title: true }),
+      h('h3', { style: 'margin-top:16px' }, '미리보기'),
+      h('div', { class: 'blog-preview', id: 'blogPreview' }),
+      h('div', { class: 'actions' }, ...approveButtons(k, o),
+        h('button', { onclick: copyBlogRich }, '📋 서식째 복사'),
+        h('button', { onclick: () => copyText(`${$('#f_title').value}\n\n${$('#f_body').value.replace(/\[사진: (m\d+)\]\n?/g, '')}`) }, '📋 글만 복사')),
+      h('details', { style: 'margin-top:14px' }, h('summary', {}, '블로그용 사진 받기'),
+        h('div', { class: 'thumbs' }, ...project.media.map((m) =>
+          h('a', { class: 't', href: file('out', `blog/${m.id}.jpg`), download: `${m.id}.jpg` },
+            h('img', { src: file('out', `blog/${m.id}.jpg`), alt: m.id }), h('span', { class: 'badge' }, m.id))))));
+    renderBlogPreview();
+  }
+}
+
+function blogHtml(title, md, absolute = false) {
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const origin = absolute ? location.origin : '';
+  const out = [`<h1>${esc(title)}</h1>`];
+  for (const block of md.split(/\n{2,}/)) {
+    for (const line of block.split('\n')) {
+      const img = line.match(/^\[사진: (m\d+)\]$/);
+      if (img) out.push(`<img src="${origin}${file('out', `blog/${img[1]}.jpg`)}" alt="">`);
+      else if (line.startsWith('## ')) out.push(`<h2>${esc(line.slice(3))}</h2>`);
+      else if (line.trim()) out.push(`<p>${esc(line)}</p>`);
+    }
+  }
+  return out.join('\n');
+}
+function renderBlogPreview() {
+  const el = $('#blogPreview');
+  if (el) el.innerHTML = blogHtml($('#f_title').value, $('#f_body').value);
+}
+async function copyBlogRich() {
+  const html = blogHtml($('#f_title').value, $('#f_body').value, true);
+  try {
+    await navigator.clipboard.write([new ClipboardItem({
+      'text/html': new Blob([html], { type: 'text/html' }),
+      'text/plain': new Blob([$('#f_body').value], { type: 'text/plain' }),
+    })]);
+    toast('복사했어요. 사진이 안 붙으면 "블로그용 사진 받기"로 따로 올려 주세요.');
+  } catch { copyText($('#f_body').value); }
+}
+
+function sceneEditor(k) {
+  const script = project.plan?.[k];
+  if (!script) return null;
+  const byId = new Map(project.media.map((m) => [m.id, m]));
+  const rows = script.scenes.map((s) => ({ ...s }));
+  const list = h('div');
+  const hook = h('input', { type: 'text', value: script.hook || '', oninput: () => { dirty = true; } });
+  const draw = () => list.replaceChildren(...rows.map((s, i) => {
+    const m = byId.get(s.media_id);
+    const field = (name, label, tag = 'input') => {
+      const el = h(tag, { type: 'text', value: tag === 'input' ? s[name] : undefined, placeholder: label,
+        oninput: (e) => { s[name] = e.target.value; dirty = true; } });
+      if (tag === 'textarea') el.value = s[name];
+      return h('div', {}, h('span', { class: 'muted', style: 'font-size:12px' }, label), el);
+    };
+    return h('div', { class: 'scene' },
+      h('div', {}, h('img', { src: mediaThumb(m), alt: '' }), h('div', { class: 'muted', style: 'font-size:12px;text-align:center' }, `${i + 1}. ${s.media_id}`),
+        h('div', { class: 'row', style: 'justify-content:center;gap:2px' },
+          h('button', { class: 'small ghost', style: 'padding:2px 6px', disabled: i === 0, onclick: () => { [rows[i - 1], rows[i]] = [rows[i], rows[i - 1]]; dirty = true; draw(); } }, '↑'),
+          h('button', { class: 'small ghost', style: 'padding:2px 6px', onclick: () => { if (rows.length > 1) { rows.splice(i, 1); dirty = true; draw(); } } }, '✕'))),
+      h('div', {},
+        field('caption', '화면 자막'),
+        field('narration', '나레이션', 'textarea'),
+        field('price_tag', '가격 표시 (없으면 비워두기)'),
+        k === 'longform' ? field('chapter', '챕터 이름 (새 구간 시작일 때만)') : null));
+  }));
+  draw();
+  return h('details', { style: 'margin-top:16px' },
+    h('summary', {}, '🎬 장면 고치기 (자막·나레이션·가격·순서)'),
+    h('p', { class: 'muted' }, '고친 뒤 "다시 만들기"를 누르면 이 영상만 새로 만들어요.'),
+    h('span', { class: 'muted', style: 'font-size:12px' }, '첫 화면 큰 문구'), hook,
+    list,
+    h('div', { class: 'actions' },
+      h('button', { class: 'primary', onclick: async () => {
+        try {
+          await api(`/api/projects/${id}/plan/${k}`, { method: 'PUT', json: { hook: hook.value, scenes: rows } });
+          dirty = false; sig = ''; toast('다시 만드는 중이에요'); load();
+        } catch (e) { toast(e.message); }
+      } }, '🔄 이대로 다시 만들기')));
+}
+
+$('#delBtn').addEventListener('click', async () => {
+  if (!confirm('이 작업과 결과물을 모두 지울까요? 되돌릴 수 없어요.')) return;
+  try { await api(`/api/projects/${id}`, { method: 'DELETE' }); location.href = '/'; }
+  catch (e) { toast(e.message); }
+});
+window.addEventListener('beforeunload', (e) => { if (dirty) e.preventDefault(); });
+
+(async () => {
+  status = await api('/api/status');
+  if (!status.authed) return showLogin();
+  if (!id) return toast('잘못된 주소예요');
+  await load();
+})().catch((e) => toast(e.message));
+</script>
+</body>
+</html>
