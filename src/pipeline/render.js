@@ -1,6 +1,7 @@
 // 계획(plan)의 장면 목록으로 실제 영상을 만든다 (ffmpeg)
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import { config } from '../config.js';
 import { ffmpeg, audioDuration } from './media.js';
 import { narrate, makeMusic } from './audio.js';
@@ -144,17 +145,51 @@ async function renderSegment(sc, index, fmt, dir, out) {
       '-filter_complex', filter, '-map', '[v]', '-frames:v', String(frames), ...enc, out,
     ]);
   } else {
-    // 영상: 지정 구간을 잘라 쓰고, 짧으면 마지막 화면을 멈춰서 채운다
+    // 영상: 지정 구간을 잘라 쓰되, 중간에 다른 장면으로 넘어가면 그 직전까지만 쓰고
+    // 남는 시간은 마지막 화면을 천천히 확대하며 채운다
+    const src = path.join(dir, 'media', sc.media.file);
+    const shot = await findShot(src, sc.clip_start, sc.duration, sc.media.duration || sc.clip_start + sc.duration);
+    const usable = shot.length;
+    const hold = Math.max(0, sc.duration - usable);
     const filter =
       `[0:v]fps=${FPS},split=2[a][b];[a]${bg}[bg];[b]${fg}[fg];` +
       `[bg][fg]overlay=(W-w)/2:(H-h)/2,tpad=stop_mode=clone:stop_duration=${sc.duration},` +
-      `trim=duration=${sc.duration},setsar=1,format=yuv420p[v]`;
+      `trim=duration=${sc.duration}` +
+      (hold > 0.3 ? `,zoompan=z='if(lt(on,${Math.round(usable * FPS)}),1,1+0.06*(on-${Math.round(usable * FPS)})/${Math.round(hold * FPS)})':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=${W}x${H}:fps=${FPS}` : '') +
+      `,setsar=1,format=yuv420p[v]`;
     await ffmpeg([
-      '-ss', String(sc.clip_start), '-t', String(sc.duration),
-      '-i', path.join(dir, 'media', sc.media.file),
+      '-ss', String(shot.start), '-t', String(usable),
+      '-i', src,
       '-filter_complex', filter, '-map', '[v]', '-frames:v', String(frames), ...enc, out,
     ]);
   }
+}
+
+/**
+ * clip_start가 들어 있는 "한 컷"(장면이 끊기지 않고 이어지는 구간)을 찾는다.
+ * 편집된 영상이나 끊어 찍은 영상에서 다른 장면이 섞이지 않게 하기 위함.
+ * @returns {{start:number, length:number}} 실제로 잘라 쓸 시작 시각과 길이
+ */
+export async function findShot(src, clipStart, want, mediaDuration) {
+  const from = Math.max(0, clipStart - 1.5);
+  const span = Math.min(want + 3, Math.max(0.5, mediaDuration - from));
+  const text = await new Promise((resolve) => {
+    const p = spawn('ffmpeg', ['-hide_banner', '-ss', String(from), '-t', String(span), '-i', src, '-an',
+      '-vf', "scale=160:-2,select='gt(scene,0.15)',showinfo", '-f', 'null', '-']);
+    let out = '';
+    p.stderr.on('data', (d) => { out += d; });
+    p.on('close', () => resolve(out));
+    p.on('error', () => resolve(''));
+  });
+  const cuts = [...text.matchAll(/pts_time:([0-9.]+)/g)].map((m) => from + Number(m[1]));
+  // clip_start 바로 뒤(0.3초)를 "보여주려는 장면"으로 본다
+  const anchor = clipStart + 0.3;
+  const before = cuts.filter((c) => c <= anchor + 0.25);
+  const shotStart = before.length ? Math.max(before.at(-1) + 0.05, clipStart - 1.5) : clipStart;
+  const start = Math.max(shotStart, Math.min(clipStart, anchor));
+  const next = cuts.find((c) => c > start + 0.3);
+  const end = next !== undefined ? next - 0.05 : Math.min(start + want, mediaDuration);
+  return { start: Math.round(start * 100) / 100, length: Math.max(0.5, Math.min(want, end - start)) };
 }
 
 /** 장면 길이에 맞춰 나레이션을 배치한 하나의 오디오 파일 */

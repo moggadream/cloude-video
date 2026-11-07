@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { projectDir, getProject, updateProject } from '../store.js';
 import { prepareMedia } from './media.js';
-import { makePlan } from './plan.js';
+import { makePlan, sanitizePlan } from './plan.js';
 import { renderVideo, FORMATS, fmtClock } from './render.js';
 import { notify } from '../notify.js';
 import { config } from '../config.js';
@@ -21,7 +21,7 @@ const VIDEO_KEYS = ['shorts', 'reels', 'longform'];
 const setStep = (id, step, progress) =>
   updateProject(id, (p) => { p.step = step; p.progress = Math.round(progress * 100) / 100; });
 
-export async function processProject(id) {
+export async function processProject(id, opts = {}) {
   const dir = projectDir(id);
   try {
     await updateProject(id, (p) => { p.status = 'processing'; p.error = null; p.startedAt = new Date().toISOString(); });
@@ -37,7 +37,8 @@ export async function processProject(id) {
 
     // 2) AI 분석 + 대본·글 작성
     await setStep(id, 'AI가 사진을 보고 대본과 글을 쓰는 중', 0.12);
-    const plan = await makePlan(project, dir);
+    // opts.plan: 미리 작성한 계획을 그대로 쓸 때 (테스트용)
+    const plan = opts.plan ? sanitizePlan(structuredClone(opts.plan), project) : await makePlan(project, dir);
     project = await updateProject(id, (p) => {
       p.plan = plan;
       p.outputs = buildTextOutputs(p, plan);
@@ -133,10 +134,9 @@ function buildTextOutputs(project, plan) {
 }
 
 function blogMarkdown(blog, project) {
-  const byId = new Map(project.media.map((m) => [m.id, m]));
   const out = [];
   for (const s of blog.sections) {
-    if (s.media_id && byId.has(s.media_id)) out.push(`[사진: ${s.media_id}]`);
+    if (s.media_id) out.push(`[사진: ${s.media_id}]`);
     if (s.heading) out.push(`## ${s.heading}`);
     out.push(s.body.trim(), '');
   }
@@ -151,6 +151,12 @@ async function exportBlogImages(project, dir) {
   for (const m of project.media) {
     const src = m.kind === 'image' ? m.normalized : (m.frames[1] || m.frames[0]).file;
     await fs.copyFile(path.join(dir, 'work', src), path.join(outDir, `${m.id}.jpg`));
+    // 영상은 분석한 장면들도 사진으로 저장 (m1_f3.jpg)
+    if (m.kind === 'video') {
+      for (const [i, f] of m.frames.entries()) {
+        await fs.copyFile(path.join(dir, 'work', f.file), path.join(outDir, `${m.id}_f${i}.jpg`));
+      }
+    }
   }
 }
 

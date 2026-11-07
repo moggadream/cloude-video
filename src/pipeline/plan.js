@@ -59,7 +59,7 @@ export const PlanSchema = z.object({
     sections: z.array(z.object({
       heading: z.string(),
       body: z.string(),
-      media_id: z.string().describe('이 문단 위에 넣을 사진의 미디어 ID, 없으면 빈 문자열'),
+      media_id: z.string().describe("이 문단 위에 넣을 사진. 사진은 'm1', 영상 장면은 'm1:f3'. 없으면 빈 문자열"),
     })),
     hashtags: z.array(z.string()),
   }),
@@ -86,7 +86,8 @@ const SYSTEM = `당신은 한국의 지역 소개 콘텐츠를 만드는 숏폼�
 - threads(쓰레드): 450자 이내, 친구에게 말하듯 편한 말투, 이모지 약간, 핵심 정보 위주.
 - blog(네이버 블로그 스타일): 제목, 5~8개 섹션, 총 1500~2500자. 방문 정보·추천 포인트·가격 정리 포함. 섹션마다 어울리는 사진을 media_id로 지정.
 - hashtags는 '#' 없이 단어만, 결과물마다 8~15개.
-- 영상 미디어의 clip_start는 제공된 프레임 시각 근처로 고르고, 영상 길이를 넘지 않게 합니다.
+- 영상 미디어의 clip_start는 보여주려는 장면의 프레임 시각보다 0.3초쯤 앞으로 잡고, 영상 길이를 넘지 않게 합니다. 편집된 영상은 한 장면이 몇 초뿐일 수 있으니 장면당 나레이션을 짧게 씁니다.
+- 블로그 사진은 사진이면 미디어 ID(m1), 영상의 특정 장면이면 'm1:f3'처럼 장면 번호까지 씁니다.
 - caption은 화면에 크게 뜨는 문구이니 짧게 씁니다.`;
 
 let client;
@@ -120,10 +121,11 @@ async function aiPlan(project, dir) {
     } else {
       content.push({
         type: 'text',
-        text: `[${m.id}] 영상 (길이 ${m.duration.toFixed(1)}초) — 프레임 시각: ${m.frames.map((f) => `${f.time}초`).join(', ')}`,
+        text: `[${m.id}] 영상 (길이 ${m.duration.toFixed(1)}초) — 아래 장면 ${m.frames.length}개`,
       });
     }
-    for (const f of m.frames) {
+    for (const [i, f] of m.frames.entries()) {
+      if (m.kind === 'video') content.push({ type: 'text', text: `${m.id}:f${i} (${f.time}초)` });
       content.push({
         type: 'image',
         source: { type: 'base64', media_type: 'image/jpeg', data: await smallJpegBase64(path.join(dir, 'work', f.file)) },
@@ -157,7 +159,10 @@ export function mockPlan(project) {
   const category = hint.category && hint.category !== 'auto' ? hint.category : 'other';
   const name = hint.placeName || '오늘 다녀온 곳';
   const memo = hint.memo || '';
-  const media = project.media;
+  // 긴 영상은 고른 장면마다 하나의 컷으로 본다
+  const media = project.media.flatMap((m) => (m.kind === 'video' && m.frames.length > 3
+    ? m.frames.map((f) => ({ ...m, frames: [f, f] }))
+    : [m]));
   const words = {
     mart: ['신선한 상품이 가득해요', '오늘의 특가 상품', '가격도 착해요', '장보기 좋은 곳'],
     restaurant: ['대표 메뉴 등장', '보기만 해도 맛있어요', '가게 분위기도 좋아요', '재방문 각'],
@@ -167,7 +172,7 @@ export function mockPlan(project) {
 
   const scene = (m, i, long = false) => ({
     media_id: m.id,
-    clip_start: m.kind === 'video' ? Math.max(0, (m.frames[1]?.time ?? 0) - 1) : 0,
+    clip_start: m.kind === 'video' ? Math.max(0, (m.frames[1]?.time ?? 0) - 0.3) : 0,
     narration: long
       ? `${i + 1}번째 장면입니다. ${name}의 모습을 자세히 보여드릴게요. ${words[i % words.length]}. 실제 AI 연결 후에는 사진 내용을 보고 설명이 자동으로 바뀝니다.`
       : `${words[i % words.length]}. ${i === 0 ? `${name}을 소개합니다.` : ''}`.trim(),
@@ -183,7 +188,7 @@ export function mockPlan(project) {
     place_name: hint.placeName || '',
     summary: `[예시] ${name}에서 찍은 미디어 ${media.length}개입니다. ${memo}`.trim(),
     music_prompt: 'bright cheerful acoustic background music, light percussion, no vocals, 110 bpm',
-    media_notes: media.map((m) => ({ media_id: m.id, description: `${m.kind === 'image' ? '사진' : '영상'} (${m.originalName})`, items: [] })),
+    media_notes: project.media.map((m) => ({ media_id: m.id, description: `${m.kind === 'image' ? '사진' : '영상'} (${m.originalName})`, items: [] })),
     shorts: {
       title: `${name} 1분 소개`,
       hook: `${name} 가봤어요!`,
@@ -253,6 +258,12 @@ export function sanitizePlan(plan, project) {
     plan[k].hashtags = cleanTags(plan[k].hashtags);
   }
   plan.blog.hashtags = cleanTags(plan.blog.hashtags);
-  plan.blog.sections = plan.blog.sections.map((s) => ({ ...s, media_id: byId.has(s.media_id) ? s.media_id : '' }));
+  const validPhoto = (ref) => {
+    const [mid, f] = String(ref || '').split(':f');
+    const m = byId.get(mid);
+    if (!m) return false;
+    return f === undefined || (m.kind === 'video' && Number.isInteger(Number(f)) && m.frames[Number(f)] !== undefined);
+  };
+  plan.blog.sections = plan.blog.sections.map((s) => ({ ...s, media_id: validPhoto(s.media_id) ? s.media_id : '' }));
   return plan;
 }

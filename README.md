@@ -49,6 +49,12 @@ npm run sample          # samples/ 에 테스트용 사진·영상 생성
 npm run test:pipeline   # 전체 제작 실행 → data/projects/<id>/out/
 ```
 
+내 파일로 바로 만들어 보기 (서버 없이):
+```bash
+node scripts/run-local.js --category mart --name "가게 이름" 영상.mp4 사진1.jpg
+```
+긴 영상(편집된 영상 포함)은 장면이 바뀌는 지점을 찾아 여러 컷으로 나눠 씁니다.
+
 ### API 키 (.env)
 | 키 | 용도 |
 |---|---|

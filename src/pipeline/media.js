@@ -1,5 +1,6 @@
 // ffmpeg / ffprobe 도우미
 import { spawn } from 'node:child_process';
+// (spawn은 run()과 장면 찾기에서 함께 사용)
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -84,9 +85,7 @@ export async function prepareMedia(item, dir) {
   }
 
   const info = await probe(src);
-  const times = info.duration > 1
-    ? [0.15, 0.5, 0.85].map((r) => Math.round(info.duration * r * 10) / 10)
-    : [0];
+  const times = await pickVideoTimes(src, info.duration);
   const frames = [];
   for (const [i, t] of times.entries()) {
     const f = `${item.id}_f${i}.jpg`;
@@ -105,6 +104,73 @@ export async function prepareMedia(item, dir) {
     hasAudio: info.hasAudio,
     frames,
   };
+}
+
+/**
+ * 영상에서 분석할 장면 시각을 고른다.
+ * - 짧은 영상(20초 이하): 앞·가운데·뒤 3장
+ * - 긴 영상: 키프레임만 빠르게 훑어 화면이 크게 바뀌는 지점 + 고르게 채운 지점
+ *   (약 20초에 1장, 최대 60장)
+ */
+export async function pickVideoTimes(src, duration) {
+  const round = (t) => Math.round(t * 10) / 10;
+  if (duration <= 20) {
+    return duration > 1 ? [0.15, 0.5, 0.85].map((r) => round(duration * r)) : [0];
+  }
+  const want = Math.min(60, Math.max(4, Math.round(duration / 20)));
+  let keys = [];
+  let cuts = [];
+  try {
+    // 키프레임만 디코딩해서 장면 변화 점수를 얻는다 (stderr로 출력됨)
+    const text = await new Promise((resolve, reject) => {
+      const p = spawn('ffmpeg', [
+        '-hide_banner', '-skip_frame', 'nokey', '-i', src, '-an',
+        '-vf', "scale=192:-2,select='gte(scene,0)',metadata=print:key=lavfi.scene_score", '-f', 'null', '-',
+      ]);
+      let out = '';
+      p.stderr.on('data', (d) => { out += d; });
+      p.on('error', reject);
+      p.on('close', () => resolve(out));
+    });
+    const re = /pts_time:([0-9.]+)\s*\n?.*?lavfi\.scene_score=([0-9.]+)/gs;
+    for (const m of text.matchAll(re)) {
+      const t = Number(m[1]);
+      keys.push(t);
+      if (Number(m[2]) > 0.3) cuts.push(t);
+    }
+  } catch (err) {
+    console.warn('[media] 장면 찾기 실패, 고르게 나눔:', err.message);
+  }
+  const margin = Math.min(3, duration * 0.02);
+  // 편집 영상은 컷이 바뀌는 곳에 키프레임이 있다. 컷 바로 앞뒤 프레임은 어느 장면인지 애매하므로
+  // 이웃한 두 키프레임의 "가운데" 시각을 쓴다 (한 장면 안쪽이 확실함).
+  keys.sort((a, b) => a - b);
+  const mids = [];
+  for (let i = 0; i < keys.length; i++) {
+    const next = keys[i + 1] ?? duration;
+    if (next - keys[i] >= 0.6) mids.push({ t: (keys[i] + next) / 2, cut: cuts.includes(keys[i]) });
+  }
+  const usable = (t) => t >= margin && t <= duration - margin;
+  const pool = mids.filter((m) => usable(m.t));
+  if (pool.length === 0) {
+    for (let i = 0; i < want * 2; i++) pool.push({ t: margin + ((duration - 2 * margin) * (i + 0.5)) / (want * 2), cut: false });
+  }
+
+  const picked = [];
+  const minGap = (duration / want) * 0.5;
+  const tooClose = (t) => picked.some((p) => Math.abs(p - t) < minGap);
+  // 장면이 크게 바뀐 직후 구간을 우선 사용
+  for (const m of pool.filter((x) => x.cut)) {
+    if (picked.length >= Math.ceil(want / 2)) break;
+    if (!tooClose(m.t)) picked.push(m.t);
+  }
+  // 나머지는 고르게
+  for (let i = 0; picked.length < want && i < want * 3; i++) {
+    const target = margin + ((duration - 2 * margin) * (i % want + 0.5)) / want;
+    const near = pool.reduce((a, b) => (Math.abs(b.t - target) < Math.abs(a.t - target) ? b : a), pool[0]).t;
+    if (!tooClose(near)) picked.push(near);
+  }
+  return [...new Set(picked.map(round))].sort((a, b) => a - b);
 }
 
 /** 분석용으로 작은 JPEG(base64)를 만든다 (토큰 절약) */
