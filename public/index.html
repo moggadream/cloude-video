@@ -28,6 +28,7 @@
       </div>
       <input id="pick" type="file" accept="image/*,video/*" multiple hidden>
       <input id="cam" type="file" accept="image/*,video/*" capture="environment" hidden>
+      <p class="drop-hint"><b>또는 사진·영상을 여기로 끌어다 놓으세요</b></p>
       <p class="muted" style="margin:10px 0 0">여러 개를 한 번에 골라도 돼요. 가격표·간판·메뉴판·행사 안내판도 찍어 두면 AI가 읽어요.</p>
     </div>
     <div class="thumbs" id="thumbs"></div>
@@ -94,13 +95,56 @@ function renderThumbs() {
   $('#go').disabled = files.length === 0;
   $('#go').textContent = files.length ? `${files.length}개로 영상과 글 만들기` : '영상과 글 만들기';
 }
+const MEDIA_EXT = /\.(jpe?g|png|webp|heic|heif|avif|bmp|gif|mp4|mov|m4v|webm|3gp|mkv|avi)$/i;
+const isMedia = (f) => f.type.startsWith('image/') || f.type.startsWith('video/') || MEDIA_EXT.test(f.name);
+function addFiles(list) {
+  const all = [...list];
+  const ok = all.filter(isMedia);
+  // 같은 파일을 두 번 넣지 않기
+  const key = (f) => `${f.name}|${f.size}|${f.lastModified}`;
+  const have = new Set(files.map(key));
+  const fresh = ok.filter((f) => !have.has(key(f)));
+  files.push(...fresh);
+  renderThumbs();
+  const skipped = all.length - ok.length;
+  const dup = ok.length - fresh.length;
+  if (skipped || dup) toast([skipped && `사진·영상이 아닌 파일 ${skipped}개`, dup && `이미 넣은 파일 ${dup}개`].filter(Boolean).join(', ') + '는 뺐어요');
+}
 for (const id of ['#pick', '#cam']) {
   $(id).addEventListener('change', (e) => {
-    files.push(...e.target.files);
+    addFiles(e.target.files);
     e.target.value = '';
-    renderThumbs();
   });
 }
+
+// 끌어다 놓기: 화면 어디에 놓아도 받는다
+const dropBox = $('.drop');
+let dragDepth = 0;
+const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+document.addEventListener('dragenter', (e) => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  dragDepth++;
+  dropBox.classList.add('over');
+});
+document.addEventListener('dragover', (e) => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
+});
+document.addEventListener('dragleave', (e) => {
+  if (!hasFiles(e)) return;
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) dropBox.classList.remove('over');
+});
+document.addEventListener('drop', (e) => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  dragDepth = 0;
+  dropBox.classList.remove('over');
+  if ($('#go').disabled && $('#upProg') && !$('#upProg').classList.contains('hidden')) return; // 올리는 중
+  addFiles(e.dataTransfer.files);
+});
 
 $('#go').addEventListener('click', () => {
   const fd = new FormData();
