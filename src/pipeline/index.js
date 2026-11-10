@@ -135,8 +135,9 @@ function buildTextOutputs(project, plan) {
 
 function blogMarkdown(blog, project) {
   const out = [];
+  const used = new Set();
   for (const s of blog.sections) {
-    if (s.media_id) out.push(`[사진: ${s.media_id}]`);
+    if (s.media_id) { out.push(`[사진: ${s.media_id}]`); used.add(s.media_id.split(':')[0]); }
     if (s.heading) out.push(`## ${s.heading}`);
     out.push(s.body.trim(), '');
   }

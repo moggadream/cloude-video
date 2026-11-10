@@ -31,6 +31,7 @@ export const PlanSchema = z.object({
     media_id: z.string(),
     description: z.string(),
     items: z.array(z.object({ name: z.string(), price: z.string() })),
+    skip_reason: z.string().describe('롱폼에서 이 자료를 뺐다면 이유 (예: 흔들림, m3과 거의 같음). 썼으면 빈 문자열'),
   })),
   shorts: z.object({
     title: z.string(),
@@ -80,9 +81,10 @@ const SYSTEM = `당신은 한국의 지역 소개 콘텐츠를 만드는 숏폼�
 - 사진에 없는 메뉴나 상품을 지어내지 마세요.
 
 결과물 규칙
+- 쇼츠·릴스는 앞쪽 자료만 쓰지 말고 전체 자료 중 가장 좋은 장면을 고르게 고릅니다. 둘은 가능하면 서로 다른 장면을 씁니다.
 - shorts(유튜브 쇼츠, 세로): 6~10장면, 전체 나레이션 25~50초 분량. 첫 장면은 가장 눈길을 끄는 미디어로. 장면당 나레이션 1~2문장.
 - reels(인스타그램 릴스, 세로): 4~7장면, 15~30초 분량. 쇼츠보다 더 짧고 리듬감 있게, 다른 문장으로.
-- longform(유튜브 롱폼, 가로): 모든 미디어를 활용하고, 좋은 미디어는 두 번 써도 됩니다. 장면당 2~4문장으로 자세히. 인트로·본론·마무리 흐름, chapter로 구간을 나눕니다(3~6개).
+- longform(유튜브 롱폼, 가로): 쓸 만한 자료는 대부분 활용합니다. 흔들리거나 초점이 나간 것, 거의 같은 장면이 겹치는 것, 장소와 관계없는 것만 뺍니다. 뺀 자료는 media_notes의 skip_reason에 이유를 짧게 적습니다. 긴 영상은 여러 장면을 나눠 쓰고, 좋은 미디어는 두 번 써도 됩니다. 장면당 2~4문장으로 자세히. 인트로·본론·마무리 흐름, chapter로 구간을 나눕니다(3~6개).
 - threads(쓰레드): 450자 이내, 친구에게 말하듯 편한 말투, 이모지 약간, 핵심 정보 위주.
 - blog(네이버 블로그 스타일): 제목, 5~8개 섹션, 총 1500~2500자. 방문 정보·추천 포인트·가격 정리 포함. 섹션마다 어울리는 사진을 media_id로 지정.
 - hashtags는 '#' 없이 단어만, 결과물마다 8~15개.
@@ -154,6 +156,13 @@ async function aiPlan(project, dir) {
 }
 
 /** API 키가 없을 때 쓰는 예시 계획. 전체 흐름 테스트용. */
+/** 배열에서 n개를 처음부터 끝까지 고르게 고른다 */
+export function spread(arr, n) {
+  if (arr.length <= n) return [...arr];
+  if (n <= 1) return [arr[0]];
+  return Array.from({ length: n }, (_, i) => arr[Math.round((i * (arr.length - 1)) / (n - 1))]);
+}
+
 export function mockPlan(project) {
   const hint = project.hints || {};
   const category = hint.category && hint.category !== 'auto' ? hint.category : 'other';
@@ -163,6 +172,9 @@ export function mockPlan(project) {
   const media = project.media.flatMap((m) => (m.kind === 'video' && m.frames.length > 3
     ? m.frames.map((f) => ({ ...m, frames: [f, f] }))
     : [m]));
+  const shortsPick = spread(media, 8);
+  const rest = media.filter((m) => !shortsPick.includes(m));
+  const reelsPick = spread(rest.length >= 5 ? rest : media, 5);
   const words = {
     mart: ['신선한 상품이 가득해요', '오늘의 특가 상품', '가격도 착해요', '장보기 좋은 곳'],
     restaurant: ['대표 메뉴 등장', '보기만 해도 맛있어요', '가게 분위기도 좋아요', '재방문 각'],
@@ -188,11 +200,11 @@ export function mockPlan(project) {
     place_name: hint.placeName || '',
     summary: `[예시] ${name}에서 찍은 미디어 ${media.length}개입니다. ${memo}`.trim(),
     music_prompt: 'bright cheerful acoustic background music, light percussion, no vocals, 110 bpm',
-    media_notes: project.media.map((m) => ({ media_id: m.id, description: `${m.kind === 'image' ? '사진' : '영상'} (${m.originalName})`, items: [] })),
+    media_notes: project.media.map((m) => ({ media_id: m.id, description: `${m.kind === 'image' ? '사진' : '영상'} (${m.originalName})`, items: [], skip_reason: '' })),
     shorts: {
       title: `${name} 1분 소개`,
       hook: `${name} 가봤어요!`,
-      scenes: media.slice(0, 8).map((m, i) => scene(m, i)),
+      scenes: shortsPick.map((m, i) => scene(m, i)),
       description: `[예시 설명] ${name}을 짧게 소개합니다. ${memo}`.trim(),
       hashtags: [...tags, 'shorts'],
     },
@@ -206,7 +218,7 @@ export function mockPlan(project) {
     reels: {
       title: `${name}`,
       hook: `여기 어디게?`,
-      scenes: media.slice(0, 5).map((m, i) => scene(m, i)),
+      scenes: reelsPick.map((m, i) => scene(m, i)),
       description: `[예시 캡션] ${name} 다녀왔어요 ✨ ${memo}`.trim(),
       hashtags: [...tags, 'reels', '릴스'],
     },
@@ -217,7 +229,7 @@ export function mockPlan(project) {
       title: `[예시] ${name} 방문 후기`,
       sections: [
         { heading: '들어가며', body: `${name}에 다녀온 이야기를 정리했어요. (AI 연결 전 예시 글입니다)`, media_id: media[0]?.id || '' },
-        ...media.slice(1, 6).map((m, i) => ({
+        ...spread(media.slice(1), 5).map((m, i) => ({
           heading: `${i + 1}. ${words[i % words.length]}`,
           body: '이 자리에 사진 내용을 바탕으로 한 설명이 들어갑니다.',
           media_id: m.id,

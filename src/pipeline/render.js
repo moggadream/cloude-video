@@ -123,6 +123,9 @@ export async function renderVideo({ format, script, project, dir, musicPrompt, o
     voice: hasVoice,
     music: music.source,
     chapters: format === 'longform' ? chapterList(scenes) : [],
+    sceneCount: scenes.length,
+    plannedScenes: script.scenes.length,
+    usedMedia: [...new Set(scenes.map((s) => s.media_id))],
     renderedAt: new Date().toISOString(),
   };
 }

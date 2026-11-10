@@ -96,6 +96,28 @@ function renderTabs() {
   }));
 }
 
+// 올린 자료 중 이 영상에 쓰인 것 / 안 쓰인 것
+function usageInfo(k, v) {
+  const used = new Set(v.usedMedia || project.plan?.[k]?.scenes.map((s) => s.media_id) || []);
+  const total = project.media.length;
+  const unused = project.media.filter((m) => !used.has(m.id));
+  const cut = v.plannedScenes && v.sceneCount < v.plannedScenes
+    ? ` · 길이 제한으로 장면 ${v.plannedScenes - v.sceneCount}개 빠짐` : '';
+  const head = h('span', {}, `📦 올린 자료 ${total}개 중 ${used.size}개 사용${cut}`);
+  if (!unused.length) return h('p', { class: 'muted', style: 'margin:8px 0' }, head);
+  return h('details', { class: 'muted', style: 'margin:8px 0' },
+    h('summary', { style: 'font-weight:600' }, head, ` · 안 쓴 자료 ${unused.length}개 보기`),
+    h('p', { style: 'margin:6px 0' }, k === 'longform'
+      ? 'AI가 흔들리거나 겹치는 자료는 뺐어요. 사진 아래에 뺀 이유가 있어요.'
+      : '쇼츠·릴스는 짧아서 좋은 장면만 골라 써요. 아래 "장면 고치기"에서 바꿀 수 있어요.'),
+    h('div', { class: 'thumbs' }, ...unused.map((m) => {
+      const why = project.plan?.media_notes?.find((n) => n.media_id === m.id)?.skip_reason;
+      return h('div', {},
+        h('div', { class: 't' }, h('img', { src: mediaThumb(m), alt: '', loading: 'lazy' }), h('span', { class: 'badge' }, m.id)),
+        why ? h('div', { style: 'font-size:11px;margin-top:2px' }, why) : null);
+    })));
+}
+
 function approvalBlock(k, o) {
   const plat = status.platforms[k];
   return h('div', { class: 'notice' },
@@ -167,6 +189,7 @@ function renderPanel() {
       o.status === 'failed' ? h('div', { class: 'notice warn' }, `영상 제작 실패: ${o.error || ''}`) : null,
       v ? h('div', { class: `player ${v.height > v.width ? 'v' : ''}` },
         h('video', { src: `${file('out', v.file)}?v=${o.version}`, controls: true, playsinline: true, preload: 'metadata', poster: `${file('out', v.thumb)}?v=${o.version}` })) : null,
+      v ? usageInfo(k, v) : null,
       v ? h('p', { class: 'muted' }, `${Math.floor(v.duration / 60)}분 ${Math.round(v.duration % 60)}초 · ${v.width}×${v.height} · 나레이션 ${v.voice ? '있음' : '없음(키 필요)'} · 음악 ${v.music === 'ai' ? 'AI 작곡' : '임시 음악'}`) : null,
       approvalBlock(k, o),
       ...textFields(k, o, { title: k !== 'reels', limit: k === 'reels' ? 2200 : 5000 }),
