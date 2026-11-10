@@ -44,6 +44,8 @@ npm start              # http://localhost:3000
    FFMPEG_PATH=D:\ProgramFiles\ffmpeg\bin\ffmpeg.exe
    ```
 3. 프로젝트 폴더에서 `npm install` → `npm start` → 브라우저에서 http://localhost:3000
+4. 다음부터는 **`start-windows.bat`을 더블클릭**하면 업데이트 확인 → 부품 설치 → 앱 켜기 → 브라우저 열기까지 한 번에 돼요.
+   - 컴퓨터를 켤 때 자동으로 실행하려면: `Win + R` → `shell:startup` 입력 → 열린 폴더에 `start-windows.bat`의 **바로가기**를 넣으세요.
 
 ### 테스트 모드 (API 키 없이)
 키가 없어도 전체 흐름을 확인할 수 있어요.
