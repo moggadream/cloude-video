@@ -37,6 +37,14 @@ cp .env.example .env   # 필요한 키를 채우기 (없어도 테스트 모드�
 npm start              # http://localhost:3000
 ```
 
+### Windows에서 실행하기
+1. **Node.js 20 이상**, **ffmpeg**가 필요해요. PowerShell에서 `node -v`, `ffmpeg -version`으로 확인하세요.
+2. ffmpeg를 압축만 풀어 두고 PATH에 등록하지 않았다면, `.env` 파일에 위치를 적으세요 (ffprobe는 같은 폴더에서 자동으로 찾아요).
+   ```
+   FFMPEG_PATH=D:\ProgramFiles\ffmpeg\bin\ffmpeg.exe
+   ```
+3. 프로젝트 폴더에서 `npm install` → `npm start` → 브라우저에서 http://localhost:3000
+
 ### 테스트 모드 (API 키 없이)
 키가 없어도 전체 흐름을 확인할 수 있어요.
 - AI 분석 → 예시 글로 대신 작성

@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { config } from '../config.js';
-import { ffmpeg, audioDuration } from './media.js';
+import { ffmpeg, audioDuration, concatLine } from './media.js';
 import { narrate, makeMusic } from './audio.js';
 
 export const FORMATS = {
@@ -69,7 +69,7 @@ export async function renderVideo({ format, script, project, dir, musicPrompt, o
 
   // 3) 이어 붙이기
   const listFile = path.join(work, 'segments.txt');
-  await fs.writeFile(listFile, segFiles.map((f) => `file '${f}'`).join('\n'));
+  await fs.writeFile(listFile, segFiles.map(concatLine).join('\n'));
   const joined = path.join(work, 'joined.mp4');
   await ffmpeg(['-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', joined]);
 
@@ -88,7 +88,9 @@ export async function renderVideo({ format, script, project, dir, musicPrompt, o
   // 7) 최종 합성: 자막 입히기 + 나레이션 + 배경음악(나레이션 나올 때 자동으로 작아짐)
   const outFile = path.join(dir, 'out', `${format}.mp4`);
   const hasVoice = scenes.some((s) => s.voice);
-  const subs = `subtitles=filename=${escapeFilterPath(assFile)}:fontsdir=${escapeFilterPath(config.fontsDir)}`;
+  // Windows의 'D:\\...' 같은 경로는 필터 안에서 깨지기 쉬워, 작업 폴더 기준 상대 경로를 쓴다
+  const fontsRel = path.relative(work, config.fontsDir).split(path.sep).join('/');
+  const subs = `subtitles=filename=subs.ass:fontsdir=${escapeFilterPath(fontsRel)}`;
   const audioFilter = hasVoice
     ? `[1:a]aformat=sample_rates=44100:channel_layouts=stereo,asplit=2[v1][v2];` +
       `[2:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=0.35,atrim=0:${total}[m];` +
@@ -104,7 +106,7 @@ export async function renderVideo({ format, script, project, dir, musicPrompt, o
     '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-pix_fmt', 'yuv420p',
     '-c:a', 'aac', '-b:a', '192k', '-t', String(total),
     '-movflags', '+faststart', outFile,
-  ]);
+  ], { cwd: work });
   onProgress(0.95);
 
   const thumb = path.join(dir, 'out', `${format}_thumb.jpg`);
@@ -174,7 +176,7 @@ export async function findShot(src, clipStart, want, mediaDuration) {
   const from = Math.max(0, clipStart - 1.5);
   const span = Math.min(want + 3, Math.max(0.5, mediaDuration - from));
   const text = await new Promise((resolve) => {
-    const p = spawn('ffmpeg', ['-hide_banner', '-ss', String(from), '-t', String(span), '-i', src, '-an',
+    const p = spawn(config.ffmpegPath, ['-hide_banner', '-ss', String(from), '-t', String(span), '-i', src, '-an',
       '-vf', "scale=160:-2,select='gt(scene,0.15)',showinfo", '-f', 'null', '-']);
     let out = '';
     p.stderr.on('data', (d) => { out += d; });
@@ -213,7 +215,7 @@ async function buildVoiceTrack(scenes, work) {
     parts.push(part);
   }
   const list = path.join(work, 'voice.txt');
-  await fs.writeFile(list, parts.map((f) => `file '${f}'`).join('\n'));
+  await fs.writeFile(list, parts.map(concatLine).join('\n'));
   const out = path.join(work, 'voice.wav');
   await ffmpeg(['-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', out]);
   return out;

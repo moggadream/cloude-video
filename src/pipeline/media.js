@@ -3,10 +3,11 @@ import { spawn } from 'node:child_process';
 // (spawn은 run()과 장면 찾기에서 함께 사용)
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { config } from '../config.js';
 
-export function run(cmd, args, { quiet = true } = {}) {
+export function run(cmd, args, { quiet = true, cwd } = {}) {
   return new Promise((resolve, reject) => {
-    const p = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const p = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], cwd });
     let out = '';
     let err = '';
     p.stdout.on('data', (d) => { out += d; });
@@ -23,10 +24,13 @@ export function run(cmd, args, { quiet = true } = {}) {
   });
 }
 
-export const ffmpeg = (args) => run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', ...args]);
+export const ffmpeg = (args, opts = {}) => run(config.ffmpegPath, ['-hide_banner', '-loglevel', 'error', '-y', ...args], opts);
+
+/** ffmpeg 목록 파일(concat)에 쓰는 경로. Windows의 \\ 도 / 로 바꿔 둔다 */
+export const concatLine = (f) => `file '${f.replace(/\\/g, '/').replace(/'/g, "'\\''")}'`;
 
 export async function probe(file) {
-  const out = await run('ffprobe', [
+  const out = await run(config.ffprobePath, [
     '-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', file,
   ]);
   const info = JSON.parse(out);
@@ -44,7 +48,7 @@ export async function probe(file) {
 }
 
 export async function audioDuration(file) {
-  const out = await run('ffprobe', [
+  const out = await run(config.ffprobePath, [
     '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', file,
   ]);
   return Number(out.trim()) || 0;
@@ -123,7 +127,7 @@ export async function pickVideoTimes(src, duration) {
   try {
     // 키프레임만 디코딩해서 장면 변화 점수를 얻는다 (stderr로 출력됨)
     const text = await new Promise((resolve, reject) => {
-      const p = spawn('ffmpeg', [
+      const p = spawn(config.ffmpegPath, [
         '-hide_banner', '-skip_frame', 'nokey', '-i', src, '-an',
         '-vf', "scale=192:-2,select='gte(scene,0)',metadata=print:key=lavfi.scene_score", '-f', 'null', '-',
       ]);

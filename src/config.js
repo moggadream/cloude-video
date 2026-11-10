@@ -7,6 +7,14 @@ export const ROOT = path.resolve(here, '..');
 
 const env = (k, d = '') => (process.env[k] ?? d).trim();
 
+// FFMPEG_PATH만 적었을 때 같은 폴더의 ffprobe를 쓴다
+function ffprobeNextTo(ffmpegPath) {
+  if (!ffmpegPath) return 'ffprobe';
+  const dir = path.dirname(ffmpegPath);
+  const ext = path.extname(ffmpegPath);
+  return path.join(dir, `ffprobe${ext}`);
+}
+
 export const config = {
   port: Number(env('PORT', '3000')),
   // 공개 주소 (알림 링크에 사용). 예: https://video.example.com
@@ -15,6 +23,9 @@ export const config = {
   appPassword: env('APP_PASSWORD', ''),
   dataDir: path.resolve(ROOT, env('DATA_DIR', 'data')),
   fontsDir: path.join(ROOT, 'assets', 'fonts'),
+  // ffmpeg가 PATH에 없으면 실행 파일 위치를 적는다. 예: D:\\ProgramFiles\\ffmpeg\\bin\\ffmpeg.exe
+  ffmpegPath: env('FFMPEG_PATH', 'ffmpeg'),
+  ffprobePath: env('FFPROBE_PATH', '') || ffprobeNextTo(env('FFMPEG_PATH', '')),
 
   anthropic: {
     apiKey: env('ANTHROPIC_API_KEY'),
