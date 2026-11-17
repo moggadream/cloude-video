@@ -141,7 +141,11 @@ export function lintOutput(key, out, plan, project) {
   if (key === 'blog') {
     const body = out.sections.map((s) => s.body).join('\n');
     const n = body.replace(/\s/g, '').length;
-    if (n < L.chars[0] || n > L.chars[1]) add('warn', `본문 ${n}자 (공백 제외, 권장 ${L.chars[0]}~${L.chars[1]}자)`);
+    // 쓸 만한 장면 수에 맞춘 최소 분량 (장면이 적으면 짧아도 됨)
+    const usable = (plan.shots || []).filter((s) => s.quality !== 'bad').length || 8;
+    const minChars = Math.max(900, Math.min(L.chars[0] + 300, usable * 120));
+    if (n < minChars || n > L.chars[1]) add('warn', `본문 ${n}자 (공백 제외, 이 자료 기준 권장 ${minChars}~${L.chars[1]}자)`);
+    if (/(영상으로 담|사진에도 .{0,6}찍혀|영상만 봐도|사진만 봐도|사진 한 장에)/.test(body)) add('warn', '촬영 과정 이야기("영상으로 담았죠" 등) — 보이는 것을 쓰기');
     const k = out.sections.length;
     if (k < L.sections[0] || k > L.sections[1]) add('warn', `섹션 ${k}개 (권장 ${L.sections[0]}~${L.sections[1]}개)`);
     const photos = out.sections.filter((s) => s.shot).length;
