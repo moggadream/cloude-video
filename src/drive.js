@@ -80,7 +80,7 @@ export async function listUploadFolders() {
 }
 
 /** 폴더 이름에서 장소 종류 힌트: "[마트] 코스트코" 처럼 앞에 붙여 두면 사용 */
-function conceptFromName(name) {
+export function conceptFromName(name) {
   const m = name.match(/^\s*\[(.+?)\]/);
   return m ? conceptFromTag(m[1]) : null;
 }
@@ -98,7 +98,7 @@ function categoryFromName(name) {
 }
 
 /** 드라이브 폴더 → 새 작업. 자료는 내 컴퓨터로 복사해 둔다 (드라이브는 받는 중일 수 있어서) */
-export async function createProjectFromFolder(name) {
+export async function createProjectFromFolder(name, { concept: pickedConcept } = {}) {
   const dir = safeFolder(name);
   if (!dir || !fsSync.existsSync(dir)) throw new Error(`"${name}" 폴더를 찾지 못했어요`);
   const files = await mediaFiles(dir);
@@ -110,7 +110,12 @@ export async function createProjectFromFolder(name) {
   const placeName = name.replace(/^\s*\[.+?\]\s*/, '').replace(/^\d{4}[-.]?\d{2}[-.]?\d{2}[\s_-]*/, '').trim();
   const project = await createProject({
     source: { type: 'drive', folder: name },
-    hints: { category: categoryFromName(name), concept: conceptFromName(name) || 'auto', placeName, memo },
+    hints: {
+      category: CONCEPT_BY_ID[pickedConcept]?.category || categoryFromName(name),
+      concept: CONCEPT_BY_ID[pickedConcept] ? pickedConcept : (conceptFromName(name) || 'auto'),
+      placeName,
+      memo,
+    },
   });
   const pdir = projectDir(project.id);
   const media = [];
@@ -152,6 +157,8 @@ export async function exportToDrive(project) {
     const v = project.outputs?.[key]?.video;
     if (v) await fs.copyFile(path.join(out, v.file), path.join(dest, name));
   }
+  const thumb = project.outputs?.longform?.thumbnail;
+  if (thumb) await fs.copyFile(path.join(out, thumb.file), path.join(dest, '4_유튜브롱폼_썸네일.jpg')).catch(() => {});
   const car = project.outputs?.carousel?.images;
   if (car?.length) {
     const cdir = path.join(dest, '5_인스타캐러셀');

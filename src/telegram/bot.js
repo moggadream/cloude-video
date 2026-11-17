@@ -12,7 +12,7 @@ import { enqueue, queueLength } from '../queue.js';
 import { getProject, listProjects, createProject, updateProject, projectDir, isValidId } from '../store.js';
 import { processProject, reviseAndRender, setApproval } from '../pipeline/index.js';
 import { PLATFORMS, PLATFORM_KEYS, CATEGORIES } from '../pipeline/plan.js';
-import { driveReady, listUploadFolders, createProjectFromFolder } from '../drive.js';
+import { driveReady, listUploadFolders, createProjectFromFolder, conceptFromName } from '../drive.js';
 import { aiStatus } from '../ai/index.js';
 import { kindOf } from '../pipeline/media.js';
 import { CONCEPTS, CONCEPT_BY_ID, guideText, totals } from '../guides/concepts.js';
@@ -238,8 +238,19 @@ async function askMake(query) {
   return send(`어떤 자료로 만들까요?${query ? `\n("${query}" 폴더는 찾지 못했어요)` : ''}\n🔁 표시는 이미 만든 폴더예요 (다시 만들기).`, kb(rows));
 }
 
-async function startFolder(name) {
-  const id = await createProjectFromFolder(name);
+async function startFolder(name, concept) {
+  // 폴더 이름에 [태그]가 없으면 컨셉부터 물어본다 (컨셉별 전략이 대본에 반영됨)
+  if (!concept && !conceptFromName(name)) {
+    const i = st.folderChoices.indexOf(name) >= 0 ? st.folderChoices.indexOf(name) : st.folderChoices.push(name) - 1;
+    saveState();
+    const rows = [];
+    for (let j = 0; j < CONCEPTS.length; j += 2) {
+      rows.push(CONCEPTS.slice(j, j + 2).map((c) => ({ text: `${c.emoji} ${c.label}`, callback_data: `mc:${i}:${c.id}` })));
+    }
+    rows.push([{ text: '🤖 AI가 알아서 판단', callback_data: `mc:${i}:auto` }]);
+    return send(`"${name}" 은(는) 어떤 컨셉인가요?\n(다음부터는 폴더 이름 앞에 [맛집] 처럼 붙여 두면 바로 시작해요)`, kb(rows));
+  }
+  const id = await createProjectFromFolder(name, { concept: concept === 'auto' ? undefined : concept });
   return startProject(id, name);
 }
 
@@ -281,6 +292,13 @@ async function onCallback(q) {
     const c = CONCEPT_BY_ID[data.slice(3)];
     await answer();
     return c ? send(guideText(c)) : null;
+  }
+  if (data.startsWith('mc:')) {
+    const [, idx, concept] = data.split(':');
+    const name = st.folderChoices[Number(idx)];
+    await answer();
+    if (!name) return send('목록이 오래됐어요. /make 를 다시 눌러 주세요.');
+    return startFolder(name, concept);
   }
   if (data.startsWith('mk:')) {
     const name = st.folderChoices[Number(data.slice(3))];
@@ -361,6 +379,9 @@ async function sendOutput(p, key, prefix = '') {
     const file = path.join(out, o.video.file);
     const size = fsSync.statSync(file).size;
     const caption = clip(`🎬 ${head} · ${dur(o.video.duration)}\n\n${textBlock}`, 1024);
+    if (key === 'longform' && o.thumbnail) {
+      await upload('sendPhoto', 'photo', path.join(out, o.thumbnail.file), { chat_id: chatId(), caption: '🖼 유튜브 썸네일 (롱폼용)' }).catch(() => {});
+    }
     if (size <= MAX_UPLOAD) {
       const m = await upload('sendVideo', 'video', file, {
         chat_id: chatId(), caption, supports_streaming: true,

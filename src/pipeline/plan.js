@@ -59,6 +59,9 @@ const VideoOut = z.object({
   description: z.string(),
   hashtags: z.array(z.string()).describe("'#' 없이 단어만"),
 });
+const LongformOut = VideoOut.extend({
+  thumbnail_text: z.string().describe('유튜브 썸네일에 크게 넣을 글자. 2줄(\\n), 한 줄 9자 이내. 숫자·장소·핵심 한 방'),
+});
 const CarouselOut = z.object({
   slides: z.array(z.object({ shot: z.string(), headline: z.string(), body: z.string() })),
   caption: z.string(),
@@ -195,7 +198,7 @@ export async function writePlatform(key, project, plan, siblings = '') {
   return generate({
     system: await platformSystem(key, '', plan.concept),
     content: [{ type: 'text', text: `${ctx}${siblings ? `\n\n${siblings}` : ''}\n\n위 자료로 ${PLATFORMS[key].label} 결과물을 써주세요.` }],
-    schema: OUT_SCHEMA[PLATFORMS[key].type],
+    schema: key === 'longform' ? LongformOut : OUT_SCHEMA[PLATFORMS[key].type],
     label: PLATFORMS[key].label,
   });
 }
@@ -294,7 +297,7 @@ export async function reviseOutput(project, key, instruction, { plan: basePlan, 
       type: 'text',
       text: `${ctx}\n\n## 지금 결과물 (${PLATFORMS[key].label})\n${current}\n\n## ${auto ? '편집장의 검토 의견 (고칠 점)' : '촬영자의 수정 요청'}\n${instruction}\n\n${auto ? '고칠 점을 모두 반영하되 잘 된 부분은 살려서' : '요청을 반영해'} 같은 형식으로 다시 써주세요.`,
     }],
-    schema: OUT_SCHEMA[PLATFORMS[key].type],
+    schema: key === 'longform' ? LongformOut : OUT_SCHEMA[PLATFORMS[key].type],
     label: `${PLATFORMS[key].label} ${auto ? '자동 보완' : '수정'}`,
   });
   plan[key] = out;
@@ -422,6 +425,7 @@ export function finalizePlan(plan, project, only = null) {
       }
       cur.scenes = scenes;
       cur.hook = String(cur.hook || '').replace(/\\n/g, '\n');
+      if (cur.thumbnail_text !== undefined) cur.thumbnail_text = String(cur.thumbnail_text).replace(/\\n/g, '\n').trim();
       cur.hashtags = cleanTags(cur.hashtags, TAG_MAX[k]);
     } else if (p.type === 'carousel') {
       cur.slides = (cur.slides || []).map((sl) => {

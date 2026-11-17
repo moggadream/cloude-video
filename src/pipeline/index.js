@@ -5,7 +5,7 @@ import { projectDir, getProject, updateProject } from '../store.js';
 import { prepareMedia } from './media.js';
 import { makePlan, finalizePlan, reviseOutput, PLATFORMS, PLATFORM_KEYS, VIDEO_KEYS, allShots } from './plan.js';
 import { renderVideo, FORMATS, fmtClock } from './render.js';
-import { renderCarousel } from './carousel.js';
+import { renderCarousel, renderThumbnail } from './carousel.js';
 import { buildOutputs, textFor } from './texts.js';
 import { recordFeedback } from '../ai/skills.js';
 import { aiBackend } from '../ai/index.js';
@@ -77,6 +77,14 @@ export async function processProject(id, opts = {}) {
         console.error(`[pipeline] ${id} ${key} 실패:`, err.message);
       }
       base += w;
+    }
+
+    // 4-1) 유튜브 썸네일 (롱폼용 대표 이미지)
+    try {
+      const th = await renderThumbnail({ plan: (await getProject(id)).plan, project: await getProject(id), dir });
+      if (th) await updateProject(id, (p) => { p.outputs.longform.thumbnail = th; });
+    } catch (err) {
+      console.warn('[thumbnail] 실패:', err.message);
     }
 
     // 5) 드라이브에 저장
