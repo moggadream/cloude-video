@@ -69,12 +69,14 @@ export function lintOutput(key, out, plan, project) {
   // 합계·차액처럼 계산한 숫자일 수 있어 경고로만
   if (unknown.length) add(unknown.length > 2 ? 'error' : 'warn', `자료에 없는 금액: ${unknown.slice(0, 6).map((n) => `${n.toLocaleString()}원`).join(', ')} (계산한 값이 아니라면 확인 필요)`);
 
-  // 3) 같은 어미 반복
-  const endings = text.split(/[.!?\n]/).map((s) => s.trim()).filter((s) => s.length > 4).map((s) => s.slice(-2));
-  let run = 1;
-  for (let i = 1; i < endings.length; i++) {
-    run = endings[i] === endings[i - 1] ? run + 1 : 1;
-    if (run >= 4) { add('warn', `같은 말끝("${endings[i]}")이 4번 이상 연속`); break; }
+  // 3) 같은 어미 반복: 평범한 "~요"(어요/에요/해요 등) 문장이 계속 이어지는지
+  const SPECIAL = /(더라고요|거든요|네요|죠|던데요|잖아요|는데요|군요|래요)$/;
+  const sentences = (key === 'blog' || key === 'threads' ? text : '')
+    .split(/(?<=[.!?])\s+|\n+/).map((s) => s.trim().replace(/[.!?~)\s]+$/, '')).filter((s) => s.length > 6);
+  let run = 0;
+  for (const s of sentences) {
+    run = /요$/.test(s) && !SPECIAL.test(s) ? run + 1 : 0;
+    if (run >= 6) { add('warn', '"~어요/~에요" 같은 평범한 말끝이 6문장 연속 (더라고요·거든요·네요 등 섞기)'); break; }
   }
 
   // 4) 플랫폼별
@@ -94,6 +96,16 @@ export function lintOutput(key, out, plan, project) {
     const usedBad = shots.filter((s) => bad.has(s));
     if (usedBad.length) add('warn', `품질 낮은 장면 사용: ${usedBad.join(', ')}`);
     if (key === 'longform' && !out.scenes.some((s) => s.chapter)) add('warn', '챕터가 없음');
+    const longPrice = out.scenes.filter((s) => s.price_tag.length > 16);
+    if (longPrice.length) add('warn', `가격 표시가 긴 장면 ${longPrice.length}개 (16자 넘음): "${longPrice[0].price_tag}"`);
+    if (key !== 'longform') {
+      const longNarr = out.scenes.filter((s) => s.narration.replace(/\s/g, '').length > 45);
+      if (longNarr.length) add('warn', `나레이션이 긴 장면 ${longNarr.length}개 (공백 제외 45자 넘음)`);
+    }
+  }
+  const place = String(plan.place_name || '').replace(/[\s○]/g, '');
+  if (out.hashtags && place.length >= 2 && !out.hashtags.some((t) => t.includes(place.slice(0, Math.min(4, place.length))))) {
+    add('warn', `해시태그에 장소 이름(${plan.place_name})이 없음`);
   }
   if (L.tags && out.hashtags) {
     const max = Array.isArray(L.tags) ? L.tags[1] : L.tags;

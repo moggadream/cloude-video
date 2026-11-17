@@ -1,0 +1,22 @@
+{
+  "note": "가상 시나리오: 촬영 가이드대로 찍었다고 가정",
+  "hints": { "concept": "popup", "placeName": "성수 ○○ 팝업스토어", "memo": "금요일 오후 4시, 현장 대기 40분. 예약하면 바로 입장이라 예약 추천. 3층 거울방 포토존 제일 예쁨. 키링 품절. 인스타 팔로우 인증하면 스티커 줌. 아쉬운 점: 안이 좁아서 사람 많으면 사진 찍기 힘듦." },
+  "analysis": {
+    "category": "other", "concept": "popup", "place_name": "○○ 팝업스토어 성수",
+    "summary": "성수동 3층 건물 팝업. 층별 포토존(1층 대형 캐릭터, 2층 굿즈숍, 3층 거울방). 운영 기간과 예약 안내가 입구에 있다.",
+    "key_facts": ["운영 2026.11.14~11.30, 11:00~20:00 (입구 안내)", "네이버 예약 시 시간대별 입장, 현장 대기 가능 (입구 안내)", "입장료 무료 (입구 안내)", "머그컵 18,000원, 에코백 25,000원, 키링 12,000원(품절 스티커) (굿즈 가격표)", "인스타 팔로우 인증 시 스티커 증정 (안내판)", "성수역 3번 출구 도보 5분 (입구 안내)"],
+    "music_prompt": "trendy chill pop beat, playful synth, fashion popup vibe, no vocals, 112 bpm",
+    "shots": [
+      { "ref": "m1", "description": "건물 외관 대형 현수막, 대기줄 20명 정도", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m2", "description": "입구 운영 안내: 기간, 시간, 예약 방법, 무료", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m3:f1", "description": "영상: 1층 입장, 대형 캐릭터 조형물", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m4", "description": "1층 대형 캐릭터 포토존 정면", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m5:f1", "description": "영상: 2층 굿즈숍 둘러보기", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m6", "description": "굿즈 가격표: 머그컵 18,000원, 에코백 25,000원, 키링 12,000원 (품절 스티커)", "items": [{"name":"머그컵","price":"18,000원","note":""},{"name":"에코백","price":"25,000원","note":""},{"name":"키링","price":"12,000원","note":"품절"}], "quality": "good", "skip_reason": "" },
+      { "ref": "m7", "description": "3층 거울방, 무한 반사 조명", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m8:f1", "description": "영상: 거울방 천천히 둘러보기", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m9", "description": "인스타 인증 이벤트 안내판, 스티커", "items": [], "quality": "ok", "skip_reason": "" },
+      { "ref": "m10", "description": "사람 많은 2층, 흔들림", "items": [], "quality": "bad", "skip_reason": "흔들림·사람 얼굴" }
+    ]
+  }
+}

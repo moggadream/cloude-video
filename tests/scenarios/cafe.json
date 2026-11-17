@@ -1,0 +1,24 @@
+{
+  "note": "가상 시나리오: 촬영 가이드대로 찍었다고 가정",
+  "hints": { "concept": "cafe", "placeName": "망원동 카페 ○○", "memo": "토요일 오후 2시. 2층 창가 자리 잡음, 오후에 햇빛 길게 들어옴. 시그니처 흑임자 크림라떼 고소하고 단맛 적당, 얼음 많은 편. 바스크 치즈케이크 꾸덕하고 꽤 진함. 콘센트 창가 쪽에만 있음. 3시 넘으니 자리 꽉 참. 아쉬운 점: 계단 좁고 화장실 1개." },
+  "analysis": {
+    "category": "restaurant", "concept": "cafe", "place_name": "카페 ○○ 망원",
+    "summary": "망원동 골목 2층 구조 카페. 1층 주문대와 디저트 진열장, 2층 창가 좌석. 흑임자 크림라떼와 바스크 치즈케이크가 시그니처로 표시돼 있다.",
+    "key_facts": ["흑임자 크림라떼 6,800원 (메뉴판 '시그니처')", "아메리카노 4,800원", "바스크 치즈케이크 7,500원", "영업 11:00~21:00, 화요일 휴무 (입구 안내)", "망원역 2번 출구 도보 8분 (메모 아님, 인스타 안내 스티커)", "주차 불가 (입구 안내)", "1층 6석, 2층 14석 (내부 사진으로 센 좌석 수)"],
+    "music_prompt": "lofi jazz, warm afternoon cafe, soft piano, no vocals, 85 bpm",
+    "shots": [
+      { "ref": "m1", "description": "하얀 외벽에 작은 원목 간판, 2층 창문이 큰 건물", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m2", "description": "입구 안내: 영업 11:00~21:00, 화요일 휴무, 주차 불가", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m3", "description": "메뉴판", "items": [{"name":"흑임자 크림라떼","price":"6,800원","note":"시그니처"},{"name":"아메리카노","price":"4,800원","note":""},{"name":"바스크 치즈케이크","price":"7,500원","note":""}], "quality": "good", "skip_reason": "" },
+      { "ref": "m4", "description": "1층 디저트 진열장, 케이크 5종", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m5:f1", "description": "영상: 좁은 계단 올라가서 2층 공간 둘러보기, 원목 테이블", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m6", "description": "2층 창가 자리, 오후 햇빛이 테이블에 길게", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m7", "description": "흑임자 크림라떼 45도, 회색 크림 층이 두껍게", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m8:f1", "description": "영상: 크림라떼 위 흑임자 가루 뿌리기 (직원 서빙 때)", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m9", "description": "바스크 치즈케이크 단면, 겉은 탄 갈색 속은 크리미", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m10:f1", "description": "영상: 포크로 치즈케이크 자르기", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m11", "description": "창밖 골목 풍경과 음료 한 컷", "items": [], "quality": "ok", "skip_reason": "" },
+      { "ref": "m12", "description": "창가 아래 콘센트", "items": [], "quality": "ok", "skip_reason": "" }
+    ]
+  }
+}

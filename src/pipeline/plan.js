@@ -107,7 +107,11 @@ function shotTable(plan, project) {
 }
 
 export async function contextText(project, plan, key) {
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
   const parts = [
+    `## 오늘 날짜: ${today}`,
+    '- 행사·할인·팝업 기간이 오늘 이전에 끝났다면 "지금 가세요"가 아니라 지난 방문 후기(내년·다음 행사 참고용)로 쓴다. 기간이 남아 있으면 끝나는 날을 강조한다.',
+    '',
     '## 촬영자 정보', hintText(project), '',
     '## 자료 분석 결과',
     `- 컨셉: ${CONCEPT_BY_ID[plan.concept]?.label || '기타'}`,

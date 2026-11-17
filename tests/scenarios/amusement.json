@@ -1,0 +1,24 @@
+{
+  "note": "가상 시나리오: 촬영 가이드대로 찍었다고 가정",
+  "hints": { "concept": "amusement", "placeName": "○○랜드", "memo": "평일 목요일 10시 개장 맞춰 감. 7살 아이랑. 바이킹 대기 10분, 회전목마 5분, 범퍼카 25분(제일 김). 오후 2시 퍼레이드 앞자리는 1시 40분에 자리 잡음. 핫도그 맛있었음. 아쉬운 점: 그늘 적고 물품보관함 유료, 점심때 푸드코트 붐빔." },
+  "analysis": {
+    "category": "park_event", "concept": "amusement", "place_name": "○○랜드",
+    "summary": "중형 놀이공원 평일 방문. 바이킹, 회전목마, 범퍼카, 어린이 기차, 퍼레이드. 매표소 요금표와 대기시간 안내판이 있다.",
+    "key_facts": ["자유이용권 대인 39,000원 / 소인(36개월~12세) 33,000원 (요금표)", "오후 입장권(16시 이후) 대인 29,000원 (요금표)", "운영 10:00~20:00 (요금표)", "퍼레이드 매일 14:00, 18:00 (안내판)", "범퍼카 키 110cm 이상 (탑승 안내)", "어린이 기차 키 제한 없음, 보호자 동반 (탑승 안내)", "핫도그 4,500원, 츄러스 5,000원 (매점 메뉴판)", "주차 1일 5,000원 (주차장 안내)", "물품보관함 소형 2,000원 (사진)"],
+    "music_prompt": "playful bright carnival music, glockenspiel, upbeat, kids, no vocals, 120 bpm",
+    "shots": [
+      { "ref": "m1", "description": "매표소 요금표 가까이", "items": [{"name":"자유이용권 대인","price":"39,000원","note":""},{"name":"자유이용권 소인","price":"33,000원","note":"36개월~12세"}], "quality": "good", "skip_reason": "" },
+      { "ref": "m2:f1", "description": "영상: 정문 입장, 큰 아치와 깃발", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m3", "description": "공원 전체 지도", "items": [], "quality": "ok", "skip_reason": "" },
+      { "ref": "m4:f1", "description": "영상: 바이킹이 크게 흔들리는 장면, 비명 소리", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m5:f1", "description": "영상: 회전목마 조명과 아이", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m6", "description": "범퍼카 대기시간 안내판 '25분', 키 110cm 이상", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m7:f1", "description": "영상: 오후 2시 퍼레이드, 캐릭터 행진", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m8", "description": "매점 메뉴판", "items": [{"name":"핫도그","price":"4,500원","note":""},{"name":"츄러스","price":"5,000원","note":""}], "quality": "good", "skip_reason": "" },
+      { "ref": "m9", "description": "핫도그 클로즈업", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m10", "description": "물품보관함 요금 소형 2,000원", "items": [], "quality": "ok", "skip_reason": "" },
+      { "ref": "m11", "description": "주차장 요금 안내 1일 5,000원", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m12:f1", "description": "영상: 어린이 기차 타는 아이 뒷모습", "items": [], "quality": "ok", "skip_reason": "" }
+    ]
+  }
+}

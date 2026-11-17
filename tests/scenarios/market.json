@@ -1,0 +1,25 @@
+{
+  "note": "가상 시나리오: 촬영 가이드대로 찍었다고 가정",
+  "hints": { "concept": "market", "placeName": "○○전통시장", "memo": "일요일 오전 11시. 사람 많음. 녹두빈대떡 바삭하고 기름 많음, 양 커서 둘이 하나 충분. 꽈배기 3개 2천원 따끈함. 귤 한 바구니 5천원 마트보다 쌈. 빈대떡집 카드 되는데 꽈배기집 현금만. 아쉬운 점: 통로 좁아서 카트 못 들어감." },
+  "analysis": {
+    "category": "mart", "concept": "market", "place_name": "○○전통시장",
+    "summary": "주말 오전 전통시장. 먹거리 골목(빈대떡, 꽈배기, 어묵)과 과일·채소 가게. 손글씨 가격표가 많다.",
+    "key_facts": ["녹두빈대떡 1장 5,000원", "꽈배기 3개 2,000원", "어묵꼬치 1개 1,000원", "귤 한 바구니 5,000원 (손글씨)", "딸기 1팩 9,000원 (손글씨)", "고객주차장: 시장 공영주차장 1시간 무료 (안내판, 시장에서 구매 시)", "매월 둘째·넷째 주 월요일 휴무 (입구 현수막)", "○○역 1번 출구 바로 앞 (입구 안내도)"],
+    "music_prompt": "upbeat traditional korean market vibe, light gayageum and percussion, cheerful, no vocals, 105 bpm",
+    "shots": [
+      { "ref": "m1", "description": "시장 아치형 입구 간판 '○○전통시장'", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m2:f1", "description": "영상: 입구에서 걸어 들어가기, 양옆 가게, 사람 많음", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m3", "description": "시장 안내도와 휴무 현수막", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m4:f1", "description": "영상: 철판에 녹두빈대떡 부치는 장면, 기름 지글지글", "items": [{"name":"녹두빈대떡","price":"5,000원","note":""}], "quality": "good", "skip_reason": "" },
+      { "ref": "m5", "description": "빈대떡 가게 메뉴판", "items": [{"name":"녹두빈대떡","price":"5,000원","note":""},{"name":"고기빈대떡","price":"6,000원","note":""}], "quality": "good", "skip_reason": "" },
+      { "ref": "m6:f1", "description": "영상: 꽈배기 설탕 묻히는 손", "items": [{"name":"꽈배기 3개","price":"2,000원","note":""}], "quality": "good", "skip_reason": "" },
+      { "ref": "m7", "description": "어묵 국물 솥, 꼬치 1,000원 표시", "items": [{"name":"어묵꼬치","price":"1,000원","note":""}], "quality": "good", "skip_reason": "" },
+      { "ref": "m8", "description": "과일가게 귤 바구니, 손글씨 '한 바구니 5,000'", "items": [{"name":"귤 한 바구니","price":"5,000원","note":""}], "quality": "good", "skip_reason": "" },
+      { "ref": "m9", "description": "딸기 팩, 손글씨 9,000", "items": [{"name":"딸기 1팩","price":"9,000원","note":""}], "quality": "good", "skip_reason": "" },
+      { "ref": "m10", "description": "빈대떡 단면 가까이, 녹두와 숙주", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m11:f1", "description": "영상: 빈대떡 한 입 들어올리기", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m12", "description": "공영주차장 안내판: 시장 구매 시 1시간 무료", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m13", "description": "바닥만 찍힘", "items": [], "quality": "bad", "skip_reason": "바닥만 나옴" }
+    ]
+  }
+}
