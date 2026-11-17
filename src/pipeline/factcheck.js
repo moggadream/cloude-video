@@ -24,8 +24,10 @@ const SYSTEM = `당신은 사실 확인 담당 편집자입니다. 블로그 글
 7. 같은 섹션이나 앞 섹션에서 이미 한 말을 되풀이하는 문장
 
 고치는 법
-- 자료로 뒷받침되는 사실로 바꿀 수 있으면 바꾼다 (말투는 앞뒤 문장과 맞게, "~어요/~더라고요" 블로그 존댓말).
-- 바꿀 사실이 없으면 replace를 빈 문자열로 (문장 삭제).
+- **지우기보다 바꾸기를 먼저.** 근거 없는 부분만 빼고 같은 문장 안에서 사실 카드에 있는 내용으로 고친다 (말투는 앞뒤 문장과 맞게, "~어요/~더라고요" 블로그 존댓말).
+  예: "봉투 하나면 충분한 양이더라고요" → "봉투에 빵 3개를 담았어요" (장면 m12)
+- 지우면 앞뒤가 끊기는 경우, 앞뒤를 잇는 짧은 연결 문장으로 바꿔도 된다. 단 **새 정보는 넣지 않는다.**
+- 정말 바꿀 사실이 없을 때만 replace를 빈 문자열로 (문장 삭제).
 - find는 글에 실제로 있는 문장을 **그대로 복사**한다. 한 문장 단위로.
 - 근거가 있는 문장, 방문 정보 목록, Q&A는 건드리지 않는다.
 - 문제가 없으면 edits를 빈 배열로.`;
@@ -56,7 +58,7 @@ function applyEdits(blog, edits) {
  */
 export async function factCheckBlog(project, plan) {
   if (!plan.blog?.sections?.length) return { applied: 0, edits: [] };
-  const ctx = await contextText(project, plan, null);
+  const ctx = await contextText(project, plan, 'factcheck');
   const text = plan.blog.sections.map((s, i) => `### [${i + 1}] ${s.heading}\n${s.body}`).join('\n\n');
   const { edits } = await generate({
     system: SYSTEM,

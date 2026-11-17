@@ -70,7 +70,12 @@ const CarouselOut = z.object({
 const ThreadsOut = z.object({ text: z.string(), topic_tag: z.string() });
 const BlogOut = z.object({
   title: z.string(),
-  sections: z.array(z.object({ heading: z.string(), body: z.string(), shot: z.string().describe('없으면 빈 문자열') })),
+  sections: z.array(z.object({
+    heading: z.string(),
+    body: z.string(),
+    shot: z.string().describe('없으면 빈 문자열'),
+    facts: z.array(z.string()).describe('이 섹션 본문이 근거로 쓴 사실 카드 번호 (예: ["F3","M2"])'),
+  })),
   hashtags: z.array(z.string()),
 });
 const OUT_SCHEMA = { video: VideoOut, carousel: CarouselOut, text: ThreadsOut, blog: BlogOut };
@@ -109,6 +114,26 @@ function shotTable(plan, project) {
   }).join('\n');
 }
 
+/**
+ * 사실 카드: 글에 쓸 수 있는 근거를 번호 붙인 짧은 문장으로 (M=촬영자 메모, F=분석 결과·장면)
+ * 블로그처럼 긴 글은 이 카드에 있는 것만으로 쓰게 한다.
+ */
+export function factCards(project, plan) {
+  const cards = [];
+  const memo = String(project.hints?.memo || '');
+  memo.split(/(?<=[.!?。])\s+|\n+|,\s*(?=[가-힣])/).map((x) => x.trim()).filter((x) => x.length > 1)
+    .forEach((x, i) => cards.push(`M${i + 1}. ${x}`));
+  let n = 0;
+  const add = (t) => { if (t && String(t).trim()) cards.push(`F${++n}. ${String(t).trim()}`); };
+  (plan.key_facts || []).forEach(add);
+  for (const s of plan.shots || []) {
+    if (s.quality === 'bad') continue;
+    add(`[${s.ref}] ${s.description}`);
+    for (const it of s.items || []) add(`[${s.ref}] ${it.name}${it.price ? ` ${it.price}` : ''}${it.note ? ` (${it.note})` : ''}`);
+  }
+  return cards;
+}
+
 export async function contextText(project, plan, key) {
   const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
   const parts = [
@@ -124,6 +149,9 @@ export async function contextText(project, plan, key) {
     '- 핵심 사실:', ...plan.key_facts.map((f) => `  - ${f}`), '',
     '## 장면 목록 (ref | 위치 | 품질 | 보이는 것 | 상품·가격)', shotTable(plan, project),
   ];
+  if (key === 'blog' || key === 'factcheck') {
+    parts.push('', '## 사실 카드 (글의 모든 정보 문장은 이 카드에 근거해야 함. M=촬영자 메모: 감상·맛·경험은 M 카드에 있을 때만)', ...factCards(project, plan));
+  }
   const style = await loadStyleSamples();
   if (style) parts.push('', '## 촬영자가 예전에 쓴 글 (이 말투와 표현을 닮게 쓴다. 내용은 베끼지 않는다)', style);
   const fb = await recentFeedback(key);
@@ -475,7 +503,13 @@ export function finalizePlan(plan, project, only = null) {
     } else if (p.type === 'blog') {
       cur.sections = (cur.sections || []).map((sec) => {
         const s = sec.shot ? resolve(sec.shot) : null;
-        return { heading: String(sec.heading || '').trim(), body: String(sec.body || '').trim(), shot: s ? s.ref : '' };
+        return {
+          heading: String(sec.heading || '').trim(),
+          // 문단 앞 공백·빈 줄 정리
+          body: String(sec.body || '').split('\n').map((l) => l.trim()).join('\n').replace(/\n{3,}/g, '\n\n').trim(),
+          shot: s ? s.ref : '',
+          facts: Array.isArray(sec.facts) ? sec.facts.slice(0, 20) : [],
+        };
       });
       cur.hashtags = withPlaceTag(cleanTags(cur.hashtags, TAG_MAX.blog), plan, TAG_MAX.blog);
     } else if (p.type === 'text') {
