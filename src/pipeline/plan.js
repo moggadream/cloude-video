@@ -106,7 +106,7 @@ function shotTable(plan, project) {
   }).join('\n');
 }
 
-async function contextText(project, plan, key) {
+export async function contextText(project, plan, key) {
   const parts = [
     '## 촬영자 정보', hintText(project), '',
     '## 자료 분석 결과',
@@ -186,18 +186,18 @@ async function analyze(project, dir) {
 
 // ---------- ② 플랫폼별 ----------
 
-async function writePlatform(key, project, plan) {
+export async function writePlatform(key, project, plan, siblings = '') {
   const ctx = await contextText(project, plan, key);
   return generate({
     system: await platformSystem(key, '', plan.concept),
-    content: [{ type: 'text', text: `${ctx}\n\n위 자료로 ${PLATFORMS[key].label} 결과물을 써주세요.` }],
+    content: [{ type: 'text', text: `${ctx}${siblings ? `\n\n${siblings}` : ''}\n\n위 자료로 ${PLATFORMS[key].label} 결과물을 써주세요.` }],
     schema: OUT_SCHEMA[PLATFORMS[key].type],
     label: PLATFORMS[key].label,
   });
 }
 
 /** 동시에 n개씩 실행 */
-async function pool(items, n, fn) {
+export async function pool(items, n, fn) {
   const results = new Array(items.length);
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
@@ -223,20 +223,40 @@ export async function makePlan(project, dir, onStep = () => {}) {
 
   let done = 0;
   onStep('플랫폼별 대본 쓰는 중', 0.3);
-  const outs = await pool(PLATFORM_KEYS, 3, async (key) => {
-    const out = await writePlatform(key, project, plan);
+  await writeAll(project, plan, () => {
     done++;
     onStep(`플랫폼별 대본 쓰는 중 (${done}/${PLATFORM_KEYS.length})`, 0.3 + 0.7 * (done / PLATFORM_KEYS.length));
-    return out;
   });
-  PLATFORM_KEYS.forEach((k, i) => { plan[k] = outs[i]; });
   return finalizePlan(plan, project);
+}
+
+/**
+ * 7개 결과물 쓰기 (두 단계)
+ * ① 쇼츠·롱폼·블로그·쓰레드  ② 릴스·틱톡·캐러셀은 쇼츠를 보고 "겹치지 않게"
+ */
+export const STAGE_A = ['shorts', 'longform', 'blog', 'threads'];
+export const STAGE_B = ['reels', 'tiktok', 'carousel'];
+export async function writeAll(project, plan, onDone = () => {}) {
+  const run = (keys, siblings) => pool(keys, 3, async (k) => {
+    plan[k] = await writePlatform(k, project, plan, siblings);
+    onDone(k);
+  });
+  await run(STAGE_A, '');
+  const s = plan.shorts;
+  const siblings = s ? [
+    '## 이미 쓴 유튜브 쇼츠 (이것과 겹치지 않게)',
+    `- 훅: ${String(s.hook).replace(/\n/g, ' / ')}`,
+    `- 장면 순서: ${(s.scenes || []).map((x) => x.shot).join(' → ')}`,
+    `- 첫 나레이션: ${s.scenes?.[0]?.narration || ''}`,
+    '훅 문구, 첫 장면, 장면 순서, 문장을 쇼츠와 다르게 하세요. 같은 사실을 전하더라도 표현을 바꿉니다.',
+  ].join('\n') : '';
+  await run(STAGE_B, siblings);
 }
 
 // ---------- ③ 수정 요청 ----------
 
 /** 현재 결과물을 "장면 ref" 형식으로 되돌린다 (AI에게 보여주기 위해) */
-function toShotForm(key, plan, project) {
+export function toShotForm(key, plan, project) {
   const cur = plan[key];
   const type = PLATFORMS[key].type;
   if (type === 'video') {
@@ -256,22 +276,22 @@ function nearestShot(project, mediaId, clipStart = 0) {
 /**
  * 한 결과물만 수정 요청대로 다시 쓴다. 바뀐 plan을 돌려준다.
  */
-export async function reviseOutput(project, key, instruction) {
+export async function reviseOutput(project, key, instruction, { plan: basePlan, auto = false } = {}) {
   const backend = await aiBackend();
   if (backend === 'off') {
     throw new Error('테스트 모드(AI 없음)에서는 말로 하는 수정을 처리할 수 없어요. 확인 화면의 "장면 고치기"를 써 주세요.');
   }
-  const plan = structuredClone(project.plan);
+  const plan = structuredClone(basePlan || project.plan);
   const ctx = await contextText(project, plan, key);
   const current = JSON.stringify(toShotForm(key, plan, project), null, 1);
   const out = await generate({
     system: await platformSystem(key, '지금은 이미 쓴 결과물을 촬영자의 수정 요청대로 고치는 중입니다. 요청과 관계없는 부분은 최대한 그대로 둡니다.', plan.concept),
     content: [{
       type: 'text',
-      text: `${ctx}\n\n## 지금 결과물 (${PLATFORMS[key].label})\n${current}\n\n## 촬영자의 수정 요청\n${instruction}\n\n요청을 반영해 같은 형식으로 다시 써주세요.`,
+      text: `${ctx}\n\n## 지금 결과물 (${PLATFORMS[key].label})\n${current}\n\n## ${auto ? '편집장의 검토 의견 (고칠 점)' : '촬영자의 수정 요청'}\n${instruction}\n\n${auto ? '고칠 점을 모두 반영하되 잘 된 부분은 살려서' : '요청을 반영해'} 같은 형식으로 다시 써주세요.`,
     }],
     schema: OUT_SCHEMA[PLATFORMS[key].type],
-    label: `${PLATFORMS[key].label} 수정`,
+    label: `${PLATFORMS[key].label} ${auto ? '자동 보완' : '수정'}`,
   });
   plan[key] = out;
   return finalizePlan(plan, project, [key]);

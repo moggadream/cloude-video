@@ -46,6 +46,7 @@ export async function recordFeedback(entry) {
 }
 
 export async function recentFeedback(key, max = 12) {
+  if (process.env.NO_FEEDBACK) return []; // 평가 실행 때는 지난 수정 요청을 섞지 않는다
   let lines = [];
   try { lines = (await fs.readFile(feedbackFile(), 'utf8')).split('\n').filter(Boolean); } catch { return []; }
   return lines.map((l) => { try { return JSON.parse(l); } catch { return null; } })

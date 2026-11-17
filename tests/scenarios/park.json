@@ -1,0 +1,25 @@
+{
+  "note": "가상 시나리오: 촬영 가이드대로 찍었다고 가정",
+  "hints": { "concept": "park", "placeName": "○○호수공원", "memo": "일요일 오전 9시 반. 호수 한 바퀴 천천히 50분. 메타세쿼이아길이 단풍 절정. 반려견 산책하는 사람 많음. 10시 넘으니 자전거랑 사람 많아짐. 아쉬운 점: 주차장 10시 이후 꽉 참, 매점 커피 비쌈." },
+  "analysis": {
+    "category": "park_event", "concept": "park", "place_name": "○○호수공원",
+    "summary": "호수를 따라 도는 산책로가 있는 공원. 메타세쿼이아길, 수변 데크, 꽃정원, 포토존 액자 조형물이 있다. 안내 지도에 코스와 편의시설 위치가 있다.",
+    "key_facts": ["호수 둘레길 4.7km (안내 지도)", "메타세쿼이아길 600m (안내 지도)", "주차장 3곳, 최초 30분 무료 이후 10분당 300원 (주차 안내판)", "반려견 동반 가능, 목줄 필수 (안내판)", "자전거는 지정 도로만 (안내판)", "화장실 4곳, 매점 1곳 (안내 지도)", "매점 아메리카노 4,500원 (매점 메뉴판)"],
+    "music_prompt": "gentle piano and acoustic guitar, calm morning walk, autumn, no vocals, 80 bpm",
+    "shots": [
+      { "ref": "m1", "description": "공원 입구 표지석 '○○호수공원'", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m2", "description": "안내 지도: 둘레길 4.7km, 메타세쿼이아길, 화장실·매점·주차장 위치", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m3", "description": "호수 전경, 아침 햇살, 물안개 살짝", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m4:f1", "description": "영상: 메타세쿼이아길 걷기 시점, 주황색 단풍 터널", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m5", "description": "메타세쿼이아길 사진, 길 끝까지 단풍", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m6:f1", "description": "영상: 수변 데크 천천히 패닝, 오리 떼", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m7", "description": "액자 모양 포토존 조형물, 뒤로 호수", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m8", "description": "국화 꽃정원 가까이", "items": [], "quality": "ok", "skip_reason": "" },
+      { "ref": "m9", "description": "반려견 동반 안내판: 목줄 필수", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m10", "description": "주차 요금 안내판", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m11", "description": "매점 메뉴판", "items": [{"name":"아메리카노","price":"4,500원","note":""}], "quality": "ok", "skip_reason": "" },
+      { "ref": "m12", "description": "화장실 외관, 깨끗함", "items": [], "quality": "ok", "skip_reason": "" },
+      { "ref": "m13", "description": "거의 같은 호수 전경 (m3과 유사)", "items": [], "quality": "bad", "skip_reason": "m3과 거의 같음" }
+    ]
+  }
+}

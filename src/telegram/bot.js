@@ -354,7 +354,7 @@ async function sendOutput(p, key, prefix = '') {
     const m = await send(`${prefix}❌ ${label} 만들기 실패: ${o.error || ''}`, { reply_markup: markup });
     return remember(m, p.id, key);
   }
-  const head = `${prefix}${label}`;
+  const head = `${prefix}${label}${reviewBadge(p, key)}`;
   const textBlock = [o.title && `제목: ${o.title}`, o.topic && `주제 태그: ${o.topic}`, o.body].filter(Boolean).join('\n\n');
 
   if (PLATFORMS[key].type === 'video' && o.video) {
@@ -391,17 +391,33 @@ async function sendOutput(p, key, prefix = '') {
   return remember(m, p.id, key);
 }
 
+/** 자체 검증 점수 한 줄: " · 🧪 4.6/5 (자동 보완)" */
+function reviewBadge(p, key) {
+  const r = p.plan?.review;
+  const ai = r?.ai?.find((x) => x.key === key);
+  const lint = (r?.lintAfter || r?.lint)?.[key];
+  const parts = [];
+  if (ai) parts.push(`🧪 ${ai.total.toFixed(1)}/5`);
+  else if (lint) parts.push(`🧪 규칙 ${lint.score}점`);
+  if (r?.revised?.includes(key)) parts.push('자동 보완');
+  return parts.length ? ` · ${parts.join(' ')}` : '';
+}
+
 export async function sendReport(pid) {
   const p = await getProject(pid);
   if (!p) return;
   const ai = p.plan?._source === 'mock' ? '⚠️ AI 없이 예시로 만들었어요' : '';
   const facts = (p.plan?.key_facts || []).slice(0, 5).map((f) => `• ${f}`).join('\n');
+  const rv = p.plan?.review;
+  const avg = rv?.ai?.length ? (rv.ai.reduce((a, x) => a + x.total, 0) / rv.ai.length).toFixed(1) : null;
+  const reviewLine = avg ? `🧪 자체 검증 평균 ${avg}/5${rv.revised?.length ? ` · 기준 미달 ${rv.revised.length}개 자동 보완` : ''}` : '';
   await send([
     `✅ "${nameOf(p)}" 완성! (${PLATFORM_KEYS.length}종)`,
     `${CATEGORIES[p.plan?.category] || ''} · 자료 ${p.media.length}개`,
     p.plan?.summary || '',
     facts,
     ai,
+    reviewLine,
     p.drive ? `📁 드라이브: ${config.drive.resultName}/${p.drive.folder}` : '',
     '',
     '아래 결과물마다 ✅ 승인 / ✏️ 수정 / ⏸ 보류를 눌러 주세요.',

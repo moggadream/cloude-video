@@ -1,0 +1,26 @@
+{
+  "note": "가상 시나리오: 촬영 가이드대로 찍었다고 가정한 분석 결과 (실제 가게 아님)",
+  "hints": { "concept": "restaurant", "placeName": "성수동 바지락칼국수 ○○집", "memo": "평일 점심 12시 10분 도착, 웨이팅 25분. 칼국수 국물 마늘향 강하고 시원함, 면은 손칼국수라 굵기 들쭉날쭉. 수육은 비계 적당, 양 많음. 겉절이가 맛있어서 리필함. 주차 불가, 근처 공영주차장 이용. 아쉬운 점: 테이블 간격 좁고 시끄러움." },
+  "analysis": {
+    "category": "restaurant", "concept": "restaurant", "place_name": "○○칼국수 성수점",
+    "summary": "성수동 칼국수집 평일 점심 방문. 바지락칼국수와 수육을 주문했고 겉절이와 보리밥이 기본으로 나온다. 웨이팅이 있었고 내부는 좁은 편.",
+    "key_facts": ["바지락칼국수 9,000원", "수육(소) 18,000원 / (대) 26,000원", "들깨칼국수 10,000원", "기본: 겉절이, 보리밥 (보리밥 무료, 겉절이 리필 가능 - 안내문)", "영업 10:30~20:30, 브레이크타임 15:00~16:30 (입구 안내판)", "주차 불가 (안내문)", "성수역 4번 출구 도보 6분 (메모 아님, 입구 안내판에 '성수역 4번 출구 도보 6분')"],
+    "music_prompt": "warm acoustic guitar, cozy korean restaurant vlog, light percussion, no vocals, 100 bpm",
+    "shots": [
+      { "ref": "m1", "description": "가게 외관, 파란 간판 '○○칼국수', 입구 앞 대기 손님 4명", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m2", "description": "입구 안내판: 영업시간 10:30~20:30, 브레이크타임 15:00~16:30, 주차 불가, 성수역 4번 출구 도보 6분", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m3", "description": "벽 메뉴판 전체", "items": [{"name":"바지락칼국수","price":"9,000원","note":""},{"name":"들깨칼국수","price":"10,000원","note":""},{"name":"수육(소)","price":"18,000원","note":""},{"name":"수육(대)","price":"26,000원","note":""}], "quality": "good", "skip_reason": "" },
+      { "ref": "m4", "description": "내부 전경, 테이블 10개 정도, 좁은 간격, 손님 가득", "items": [], "quality": "ok", "skip_reason": "" },
+      { "ref": "m5", "description": "겉절이와 보리밥 기본 세팅, 위에서 촬영. 벽에 '보리밥 무료, 겉절이 리필 가능' 안내", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m6:f1", "description": "영상: 바지락칼국수 큰 그릇이 테이블에 놓이는 순간, 김이 크게 올라옴", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m7", "description": "바지락칼국수 위에서: 바지락 껍데기가 그릇을 덮을 만큼 많음, 애호박·당근 채", "items": [{"name":"바지락칼국수","price":"","note":""}], "quality": "good", "skip_reason": "" },
+      { "ref": "m8", "description": "칼국수 45도: 국물 맑은 편, 면 굵기 제각각", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m9:f1", "description": "영상: 국자로 국물 뜨는 장면, 바지락 대여섯 개 올라옴", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m10:f1", "description": "영상: 젓가락으로 면 들어 올리기, 김 남", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m11", "description": "수육(소) 접시, 비계와 살코기 반반, 새우젓·김치", "items": [{"name":"수육(소)","price":"","note":""}], "quality": "good", "skip_reason": "" },
+      { "ref": "m12", "description": "수육 한 점 가까이, 결이 보임", "items": [], "quality": "ok", "skip_reason": "" },
+      { "ref": "m13", "description": "흔들린 내부 사진", "items": [], "quality": "bad", "skip_reason": "흔들림" },
+      { "ref": "m14", "description": "영수증: 바지락칼국수 2, 수육(소) 1, 합계 36,000원", "items": [{"name":"합계","price":"36,000원","note":"칼국수2+수육소1"}], "quality": "good", "skip_reason": "" }
+    ]
+  }
+}

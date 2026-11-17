@@ -135,13 +135,31 @@ function reviseBox(k, o) {
     ta, h('div', { class: 'actions' }, btn));
 }
 
+// 자체 검증 결과 (AI 편집장 채점 + 규칙 검사)
+const SCORE_LABEL = { facts: '사실', hook: '첫인상', human: '사람다움', platform: '플랫폼', value: '정보', specific: '구체성' };
+function reviewBlock(k) {
+  const r = project.plan?.review;
+  if (!r) return null;
+  const ai = r.ai?.find((x) => x.key === k);
+  const lint = (r.lintAfter || r.lint)?.[k];
+  if (!ai && !lint) return null;
+  const head = ai ? `🧪 자체 검증 ${ai.total.toFixed(1)}/5${r.revised?.includes(k) ? ' · 기준 미달이라 자동 보완함' : ''}` : `🧪 규칙 검사 ${lint.score}점`;
+  return h('details', { class: 'notice', style: 'margin-top:8px' },
+    h('summary', {}, head),
+    ai ? h('div', { class: 'row', style: 'margin:8px 0;gap:6px' }, ...Object.entries(ai.scores).map(([key, v]) =>
+      h('span', { class: `pill ${v >= 4 ? 'ok' : v <= 2 ? 'bad' : ''}` }, `${SCORE_LABEL[key] || key} ${v}`))) : null,
+    ai?.strengths?.length ? h('div', {}, h('b', {}, '잘된 점'), h('ul', {}, ...ai.strengths.map((x) => h('li', {}, x)))) : null,
+    ai?.fixes?.length ? h('div', {}, h('b', {}, r.revised?.includes(k) ? '처음 버전에서 고친 점' : '더 고치면 좋을 점'), h('ul', {}, ...ai.fixes.map((x) => h('li', {}, x)))) : null,
+    lint?.issues?.length ? h('div', {}, h('b', {}, '규칙 검사'), h('ul', {}, ...lint.issues.map((x) => h('li', {}, `${x.level === 'error' ? '❗' : '·'} ${x.msg}`)))) : h('p', { class: 'muted' }, '규칙 검사: 문제 없음'));
+}
+
 function approvalBlock(k, o) {
   const plat = status.platforms[k];
-  return h('div', { class: 'notice' },
+  return h('div', {}, reviewBlock(k), h('div', { class: 'notice' },
     h('div', { class: 'row' }, h('b', {}, '상태'), pill(APPROVAL[o.approval] || [o.approval, ''])),
     o.publish?.message ? h('div', { class: 'muted', style: 'margin-top:6px' }, o.publish.message) : null,
     o.publish?.url ? h('div', {}, h('a', { href: o.publish.url, target: '_blank' }, '게시물 보기')) : null,
-    !o.publish ? h('div', { class: 'muted', style: 'margin-top:6px' }, plat.note) : null);
+    !o.publish ? h('div', { class: 'muted', style: 'margin-top:6px' }, plat.note) : null));
 }
 
 function approveButtons(k, o) {

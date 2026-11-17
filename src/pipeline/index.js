@@ -8,6 +8,9 @@ import { renderVideo, FORMATS, fmtClock } from './render.js';
 import { renderCarousel } from './carousel.js';
 import { buildOutputs, textFor } from './texts.js';
 import { recordFeedback } from '../ai/skills.js';
+import { aiBackend } from '../ai/index.js';
+import { selfReview, reviewEnabled } from './review.js';
+import { lintPlan, lintOutput } from './lint.js';
 import { exportToDrive } from '../drive.js';
 import { notify } from '../notify.js';
 import { bus } from '../events.js';
@@ -40,9 +43,18 @@ export async function processProject(id, opts = {}) {
     project = await updateProject(id, (p) => { p.media = media; });
 
     // 2) AI 분석 + 플랫폼별 대본 (opts.plan: 미리 써둔 계획을 쓸 때)
-    const plan = opts.plan
+    let plan = opts.plan
       ? finalizePlan(structuredClone(opts.plan), project)
-      : await makePlan(project, dir, (step, r) => setStep(id, step, 0.1 + 0.3 * r).catch(() => {}));
+      : await makePlan(project, dir, (step, r) => setStep(id, step, 0.1 + 0.24 * r).catch(() => {}));
+
+    // 2-1) 자체 검증: 규칙 검사 + AI 편집장 채점 → 기준 미달만 자동 보완
+    if (!opts.plan && plan._source !== 'mock' && reviewEnabled() && (await aiBackend()) !== 'off') {
+      const r = await selfReview(project, plan, (step, x) => setStep(id, step, 0.34 + 0.07 * x).catch(() => {}));
+      plan = r.plan;
+      plan.review = r.review;
+    } else {
+      plan.review = { at: new Date().toISOString(), ai: null, lint: lintPlan(plan, project, PLATFORM_KEYS), revised: [] };
+    }
     project = await updateProject(id, (p) => {
       p.plan = plan;
       p.outputs = buildOutputs(plan);
@@ -154,6 +166,9 @@ export async function reviseAndRender(id, key, instruction) {
   try {
     const plan = await reviseOutput(project, key, instruction);
     await recordFeedback({ key, instruction, projectId: id });
+    // 고친 결과물은 규칙 검사를 다시 (AI 채점은 처음 만들 때만)
+    plan.review = plan.review || { lint: {} };
+    plan.review.lintAfter = { ...(plan.review.lintAfter || plan.review.lint || {}), [key]: lintOutput(key, plan[key], plan, project) };
     await updateProject(id, (p) => {
       p.plan = plan;
       const o = p.outputs[key];

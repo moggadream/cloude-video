@@ -1,0 +1,26 @@
+{
+  "note": "가상 시나리오: 촬영 가이드대로 찍었다고 가정",
+  "hints": { "concept": "festival", "placeName": "2026 ○○강 억새축제", "memo": "토요일 오후 3시~7시 있었음. 3시엔 한산했는데 5시 넘어서 사람 엄청 많아짐. 셔틀 20분 기다림. 억새는 지금 딱 절정. 노을 질 때 억새밭이 제일 예쁨. 아쉬운 점: 화장실 줄 길고 그늘 없음." },
+  "analysis": {
+    "category": "park_event", "concept": "festival", "place_name": "2026 ○○강 억새축제",
+    "summary": "○○강 둔치 억새밭에서 열린 축제. 억새 산책로, 포토존, 플리마켓, 푸드트럭, 저녁 공연이 있었다. 포스터에 기간과 셔틀 정보가 있었다.",
+    "key_facts": ["기간 2026.11.6(금)~11.15(일), 운영 10:00~21:00 (포스터)", "입장료 무료 (포스터)", "셔틀: ○○역 2번 출구 ↔ 축제장, 20분 간격, 막차 21:30 (셔틀 안내판)", "임시주차장 ○○체육공원, 주차 무료 (안내판)", "저녁 공연 매일 18:30 메인무대 (프로그램표)", "토요일 18:00 억새 소원등 날리기 (프로그램표, 주말만)", "어묵꼬치 3,000원, 닭꼬치 4,000원, 회오리감자 5,000원 (푸드트럭 메뉴판)", "억새 소원등 체험 5,000원 (부스 안내)"],
+    "music_prompt": "dreamy acoustic folk, autumn festival, soft strings, golden hour, no vocals, 90 bpm",
+    "shots": [
+      { "ref": "m1", "description": "축제 포스터: 기간 11.6~11.15, 운영 10:00~21:00, 입장 무료", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m2", "description": "셔틀·주차 안내판", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m3", "description": "프로그램표: 매일 18:30 공연, 주말 18:00 소원등", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m4:f1", "description": "영상: 언덕 위에서 본 억새밭 전경, 은빛 억새가 바람에 흔들림, 사람들 산책", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m5", "description": "억새밭 산책로 사진, 역광으로 억새가 빛남", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m6", "description": "하트 모양 포토존, 대기줄 6명", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m7", "description": "플리마켓 부스들, 수공예 액세서리", "items": [], "quality": "ok", "skip_reason": "" },
+      { "ref": "m8", "description": "푸드트럭 메뉴판", "items": [{"name":"어묵꼬치","price":"3,000원","note":""},{"name":"닭꼬치","price":"4,000원","note":""},{"name":"회오리감자","price":"5,000원","note":""}], "quality": "good", "skip_reason": "" },
+      { "ref": "m9:f1", "description": "영상: 닭꼬치 굽는 그릴, 연기", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m10", "description": "소원등 체험 부스 안내: 5,000원", "items": [{"name":"소원등 체험","price":"5,000원","note":""}], "quality": "good", "skip_reason": "" },
+      { "ref": "m11:f1", "description": "영상: 노을 질 때 억새밭, 주황빛", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m12:f1", "description": "영상: 저녁 메인무대 공연, 관객 많음", "items": [], "quality": "ok", "skip_reason": "" },
+      { "ref": "m13:f1", "description": "영상: 셔틀 정류장 대기줄 길게", "items": [], "quality": "ok", "skip_reason": "" },
+      { "ref": "m14", "description": "화장실 앞 긴 줄", "items": [], "quality": "ok", "skip_reason": "" }
+    ]
+  }
+}
