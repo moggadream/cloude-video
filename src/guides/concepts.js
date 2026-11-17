@@ -5,6 +5,9 @@
 // shot.uses: 어디에 쓰이는지 (hook=첫 장면, shorts·reels·tiktok, longform, carousel, blog, cover=표지/썸네일)
 // shot.must: 꼭 필요한 컷
 
+// 메모에 적으면 좋은 것 (모든 컨셉 공통). 메모가 자세할수록 AI가 지어내지 않고 사람다운 글을 써요.
+export const MEMO_TIPS = ['언제·누구랑 (예: 평일 점심, 친구 둘이랑)', '왜 갔는지', '맛·느낌 한두 단어 (예: 짭짤, 덜 달아서 좋았음)', '기다린 시간·혼잡', '실제로 산 것·시킨 것', '아쉬운 점 하나', '기억에 남는 순간 (예: 사장님이 국물 리필해 주심)'];
+
 export const COMMON_TIPS = [
   '폰은 세로로 찍어요 (쇼츠·릴스·틱톡 기준). 대표 장면 2~3개만 가로로 한 번 더 찍으면 롱폼·블로그가 좋아져요.',
   '영상은 한 컷에 5~10초, 숨 참고 천천히. 빠르게 휘두르면 못 써요.',
@@ -16,6 +19,7 @@ export const COMMON_TIPS = [
 export const CONCEPTS = [
   {
     id: 'restaurant',
+    memoExample: '평일 점심 12시 10분 도착, 웨이팅 25분. 회사 동료 둘이랑 감. 칼국수 국물 마늘향 강하고 시원함, 면은 손칼국수라 굵기 들쭉날쭉. 수육 비계 적당, 소자인데 셋이 먹기 충분. 겉절이가 맛있어서 리필함. 주차 안 돼서 공영주차장 씀. 아쉬운 점: 테이블 좁고 시끄러움.',
     label: '음식점·맛집',
     emoji: '🍜',
     tag: '맛집',
@@ -45,6 +49,7 @@ export const CONCEPTS = [
   },
   {
     id: 'cafe',
+    memoExample: '토요일 오후 2시, 친구랑. 2층 창가 자리 잡음, 오후 햇빛이 길게 들어옴. 흑임자 라떼 고소하고 덜 달아서 좋았음. 치즈케이크 꾸덕하고 진함, 둘이 하나면 충분. 콘센트는 창가에만. 3시 넘으니 자리 꽉 참. 아쉬운 점: 계단 좁고 화장실 1개.',
     label: '카페·디저트',
     emoji: '☕',
     tag: '카페',
@@ -68,6 +73,7 @@ export const CONCEPTS = [
   },
   {
     id: 'mart',
+    memoExample: '일요일 오전 11시 방문, 사람 많음. 이번 주는 고기·간편식 할인이 큼. 체다치즈랑 만두는 실제로 삼. 품절: 소고기 일부. 계산 줄 15분. 할인은 대부분 11/8까지라고 가격표에 있음.',
     label: '마트·창고형 마트',
     emoji: '🛒',
     tag: '마트',
@@ -90,6 +96,7 @@ export const CONCEPTS = [
   },
   {
     id: 'market',
+    memoExample: '토요일 오후 2시, 가족 셋. 빈대떡 바삭하고 기름 많음, 양 커서 둘이 하나 충분. 꽈배기 따끈함. 귤 한 바구니 5천원, 마트보다 쌈. 꽈배기집은 현금만. 사장님이 어묵 국물 계속 줌. 아쉬운 점: 통로 좁아 유모차 힘듦.',
     label: '전통시장',
     emoji: '🏮',
     tag: '시장',
@@ -113,6 +120,7 @@ export const CONCEPTS = [
   },
   {
     id: 'park',
+    memoExample: '일요일 오전 9시 반, 강아지랑. 호수 한 바퀴 천천히 50분. 메타세쿼이아길 단풍 절정. 10시 넘으니 자전거랑 사람 많아짐. 벤치 많아서 쉬기 좋았음. 아쉬운 점: 주차장 10시 이후 꽉 참, 매점 커피 비쌈.',
     label: '공원·산책',
     emoji: '🌳',
     tag: '공원',
@@ -136,6 +144,7 @@ export const CONCEPTS = [
   },
   {
     id: 'amusement',
+    memoExample: '평일 목요일 10시 개장 맞춰, 7살 아이랑. 바이킹 대기 10분, 회전목마 5분, 범퍼카 25분. 퍼레이드 앞자리는 1시 40분에 잡음. 핫도그 맛있었음. 아이가 기차를 제일 좋아함. 아쉬운 점: 그늘 적고 물품보관함 유료.',
     label: '유원지·테마파크',
     emoji: '🎡',
     tag: '유원지',
@@ -159,6 +168,7 @@ export const CONCEPTS = [
   },
   {
     id: 'festival',
+    memoExample: '토요일 오후 3시~7시. 3시엔 한산, 5시 넘으니 사람 많음. 셔틀 20분 기다림. 억새 절정, 노을 때 제일 예쁨. 닭꼬치 맛있었음. 아쉬운 점: 화장실 줄 길고 그늘 없음.',
     label: '축제·행사',
     emoji: '🎪',
     tag: '축제',
@@ -182,6 +192,7 @@ export const CONCEPTS = [
   },
   {
     id: 'popup',
+    memoExample: '금요일 오후 4시, 현장 대기 40분 (예약하면 바로 입장). 3층 거울방이 제일 예쁨. 키링은 품절이라 머그컵 삼. 인스타 팔로우하면 스티커 줌. 아쉬운 점: 안이 좁아서 사람 많으면 사진 찍기 힘듦.',
     label: '팝업스토어·전시',
     emoji: '🎁',
     tag: '팝업',
@@ -252,7 +263,8 @@ export function guideText(concept) {
     lines.push(`${i + 1}. ${s.must ? '⭐ ' : ''}${s.name} — ${kind}`);
     lines.push(`   ${s.how}`);
   });
-  lines.push('', '📝 메모.txt 에 적어 주세요', ...concept.memo.map((m) => `• ${m}`));
+  lines.push('', '📝 메모.txt 에 적어 주세요 (자세할수록 글이 사람답고 정확해져요)', ...concept.memo.map((m) => `• ${m}`));
+  if (concept.memoExample) lines.push('', '✍️ 좋은 메모 예시', concept.memoExample);
   lines.push('', '🚫 피하기', ...concept.avoid.map((m) => `• ${m}`));
   lines.push('', `📁 드라이브 폴더 이름 예: [${concept.tag}] 가게·장소 이름`);
   return lines.join('\n');

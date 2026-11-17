@@ -12,7 +12,7 @@ import { enqueue, queueLength } from '../queue.js';
 import { getProject, listProjects, createProject, updateProject, projectDir, isValidId } from '../store.js';
 import { processProject, reviseAndRender, setApproval } from '../pipeline/index.js';
 import { PLATFORMS, PLATFORM_KEYS, CATEGORIES } from '../pipeline/plan.js';
-import { driveReady, listUploadFolders, createProjectFromFolder, conceptFromName } from '../drive.js';
+import { driveReady, listUploadFolders, createProjectFromFolder, conceptFromName, readFolderMemo } from '../drive.js';
 import { aiStatus } from '../ai/index.js';
 import { kindOf } from '../pipeline/media.js';
 import { CONCEPTS, CONCEPT_BY_ID, guideText, totals } from '../guides/concepts.js';
@@ -26,6 +26,7 @@ const st = {
   progressMsg: {}, // pid → 진행 상황 메시지 id
   folderChoices: [], // 마지막으로 보여준 폴더 목록
   pendingEdit: null, // { pid, key } 다음 글을 수정 요청으로 받기
+  pendingMemo: null, // { name, concept } 다음 글을 메모로 받기
 };
 
 async function loadState() {
@@ -172,6 +173,13 @@ async function onMessage(msg) {
   // 결과 메시지에 답장 → 그 결과물 수정
   const replied = msg.reply_to_message && st.msgMap[msg.reply_to_message.message_id];
   if (replied && text && !text.startsWith('/')) return startRevision(replied.pid, replied.key, text);
+  // 메모 추가 버튼을 누른 뒤 보낸 글
+  if (st.pendingMemo && text && !text.startsWith('/')) {
+    const { name, concept } = st.pendingMemo;
+    st.pendingMemo = null;
+    if (/^(취소|그만)/.test(text)) return send('취소했어요.');
+    return startFolder(name, concept || 'auto', { memoAsked: true, extraMemo: text });
+  }
   // 수정 버튼을 누른 뒤 보낸 글
   if (st.pendingEdit && text && !text.startsWith('/')) {
     const { pid, key } = st.pendingEdit;
@@ -238,7 +246,7 @@ async function askMake(query) {
   return send(`어떤 자료로 만들까요?${query ? `\n("${query}" 폴더는 찾지 못했어요)` : ''}\n🔁 표시는 이미 만든 폴더예요 (다시 만들기).`, kb(rows));
 }
 
-async function startFolder(name, concept) {
+async function startFolder(name, concept, opts = {}) {
   // 폴더 이름에 [태그]가 없으면 컨셉부터 물어본다 (컨셉별 전략이 대본에 반영됨)
   if (!concept && !conceptFromName(name)) {
     const i = st.folderChoices.indexOf(name) >= 0 ? st.folderChoices.indexOf(name) : st.folderChoices.push(name) - 1;
@@ -250,7 +258,25 @@ async function startFolder(name, concept) {
     rows.push([{ text: '🤖 AI가 알아서 판단', callback_data: `mc:${i}:auto` }]);
     return send(`"${name}" 은(는) 어떤 컨셉인가요?\n(다음부터는 폴더 이름 앞에 [맛집] 처럼 붙여 두면 바로 시작해요)`, kb(rows));
   }
-  const id = await createProjectFromFolder(name, { concept: concept === 'auto' ? undefined : concept });
+  // 메모가 짧으면 먼저 물어본다 (메모가 자세할수록 글이 사람답고 정확해짐 — 평가 10회차에서 확인)
+  if (!opts.memoAsked) {
+    const memo = await readFolderMemo(name);
+    if (memo.replace(/\s/g, '').length < 60) {
+      const i = st.folderChoices.indexOf(name) >= 0 ? st.folderChoices.indexOf(name) : st.folderChoices.push(name) - 1;
+      saveState();
+      const c = CONCEPT_BY_ID[concept] || CONCEPT_BY_ID[conceptFromName(name)];
+      return send([
+        `📝 "${name}" 메모가 ${memo ? '짧아요' : '없어요'}. 몇 줄만 적어 주시면 글이 훨씬 사람답고 정확해져요.`,
+        '',
+        '이런 걸 적어 주세요: 언제·누구랑 / 맛·느낌 / 기다린 시간 / 산 것·시킨 것 / 아쉬운 점 / 기억에 남는 순간',
+        c?.memoExample ? `\n예) ${c.memoExample}` : '',
+      ].join('\n'), kb([[
+        { text: '✍️ 메모 추가하기', callback_data: `mm:${i}:${concept || 'auto'}` },
+        { text: '그냥 만들기', callback_data: `mn:${i}:${concept || 'auto'}` },
+      ]]));
+    }
+  }
+  const id = await createProjectFromFolder(name, { concept: concept === 'auto' ? undefined : concept, extraMemo: opts.extraMemo });
   return startProject(id, name);
 }
 
@@ -292,6 +318,15 @@ async function onCallback(q) {
     const c = CONCEPT_BY_ID[data.slice(3)];
     await answer();
     return c ? send(guideText(c)) : null;
+  }
+  if (data.startsWith('mm:') || data.startsWith('mn:')) {
+    const [act, idx, concept] = data.split(':');
+    const name = st.folderChoices[Number(idx)];
+    await answer();
+    if (!name) return send('목록이 오래됐어요. /make 를 다시 눌러 주세요.');
+    if (act === 'mn') return startFolder(name, concept, { memoAsked: true });
+    st.pendingMemo = { name, concept };
+    return send('메모를 보내 주세요. 한 메시지에 편하게 적으면 돼요.', { reply_markup: { force_reply: true, input_field_placeholder: '언제·누구랑, 맛, 아쉬운 점...' } });
   }
   if (data.startsWith('mc:')) {
     const [, idx, concept] = data.split(':');

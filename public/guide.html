@@ -109,7 +109,10 @@ function renderDetail() {
       return row;
     }),
     h('h3', { style: 'margin-top:18px' }, '📝 메모.txt 에 적을 것'),
+    h('p', { class: 'muted', style: 'margin-top:0' }, '메모가 자세할수록 AI가 지어내지 않고 사람다운 글을 써요. (같은 사진으로 시험했을 때 메모를 자세히 쓰면 점수가 4.44 → 4.59로 올랐어요)'),
     h('ul', {}, ...c.memo.map((m) => h('li', {}, m))),
+    c.memoExample ? h('div', { class: 'notice' }, h('b', {}, '✍️ 좋은 메모 예시'), h('p', { style: 'margin:6px 0 0' }, c.memoExample),
+      h('div', { class: 'actions' }, h('button', { class: 'small', onclick: () => copyText(c.memoExample) }, '예시 복사'))) : null,
     h('h3', {}, '🚫 피할 것'),
     h('ul', {}, ...c.avoid.map((m) => h('li', {}, m))),
     h('details', {}, h('summary', {}, '🎬 이 컨셉 영상은 이렇게 만들어져요'),

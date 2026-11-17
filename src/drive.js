@@ -98,7 +98,17 @@ function categoryFromName(name) {
 }
 
 /** 드라이브 폴더 → 새 작업. 자료는 내 컴퓨터로 복사해 둔다 (드라이브는 받는 중일 수 있어서) */
-export async function createProjectFromFolder(name, { concept: pickedConcept } = {}) {
+/** 폴더의 메모.txt 읽기 */
+export async function readFolderMemo(name) {
+  const dir = safeFolder(name);
+  if (!dir) return '';
+  for (const m of ['메모.txt', 'memo.txt', '메모.md']) {
+    try { return (await fs.readFile(path.join(dir, m), 'utf8')).trim().slice(0, 2000); } catch { /* 없음 */ }
+  }
+  return '';
+}
+
+export async function createProjectFromFolder(name, { concept: pickedConcept, extraMemo = '' } = {}) {
   const dir = safeFolder(name);
   if (!dir || !fsSync.existsSync(dir)) throw new Error(`"${name}" 폴더를 찾지 못했어요`);
   const files = await mediaFiles(dir);
@@ -107,6 +117,7 @@ export async function createProjectFromFolder(name, { concept: pickedConcept } =
   for (const m of ['메모.txt', 'memo.txt', '메모.md']) {
     try { memo = (await fs.readFile(path.join(dir, m), 'utf8')).trim().slice(0, 2000); break; } catch { /* 없음 */ }
   }
+  if (extraMemo) memo = [memo, extraMemo].filter(Boolean).join('\n').slice(0, 3000);
   const placeName = name.replace(/^\s*\[.+?\]\s*/, '').replace(/^\d{4}[-.]?\d{2}[-.]?\d{2}[\s_-]*/, '').trim();
   const project = await createProject({
     source: { type: 'drive', folder: name },
