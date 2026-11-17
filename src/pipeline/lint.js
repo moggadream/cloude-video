@@ -90,6 +90,10 @@ export function lintOutput(key, out, plan, project) {
     if (!out.hook) add('error', '첫 화면 문구(hook)가 없음');
     else if (hookLines.some((l) => l.length > HOOK_LINE_MAX)) add('warn', `훅 한 줄이 ${HOOK_LINE_MAX}자 넘음: "${out.hook}"`);
     if (/^(안녕|오늘은|여러분)/.test(out.scenes[0]?.narration || '')) add('warn', '첫 나레이션이 인사/도입으로 시작 (훅이 약함)');
+    const norm = (x) => String(x || '').replace(/[\s\n.,!?~·]/g, '');
+    const h = norm(out.hook);
+    const n0 = norm(out.scenes[0]?.narration);
+    if (h.length >= 4 && (n0.includes(h) || (h.length >= 8 && n0.includes(h.slice(0, 8))))) add('warn', '훅(화면 제목)과 첫 나레이션이 같은 문장 (첫 나레이션은 다른 말로)');
     const shots = out.scenes.map((s) => s.shot);
     if (key !== 'longform' && new Set(shots).size < shots.length) add('warn', '같은 장면을 두 번 사용');
     const bad = new Set((plan.shots || []).filter((s) => s.quality === 'bad').map((s) => s.ref));
@@ -103,8 +107,10 @@ export function lintOutput(key, out, plan, project) {
       if (longNarr.length) add('warn', `나레이션이 긴 장면 ${longNarr.length}개 (공백 제외 45자 넘음)`);
     }
   }
-  const place = String(plan.place_name || '').replace(/[\s○]/g, '');
-  if (out.hashtags && place.length >= 2 && !out.hashtags.some((t) => t.includes(place.slice(0, Math.min(4, place.length))))) {
+  // 장소 이름 핵심(연도·○·공백 제외): "2026 ○○강 억새축제" → "강억새축제"
+  const place = String(plan.place_name || '').replace(/^\s*\d{4}\s*/, '').replace(/[\s○●◯()]/g, '');
+  const cores = place.length >= 3 ? [place.slice(0, 3), place.slice(-3)] : [place];
+  if (out.hashtags && place.length >= 2 && !out.hashtags.some((t) => cores.some((c) => t.includes(c)))) {
     add('warn', `해시태그에 장소 이름(${plan.place_name})이 없음`);
   }
   if (L.tags && out.hashtags) {

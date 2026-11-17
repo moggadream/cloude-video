@@ -113,7 +113,7 @@ export async function contextText(project, plan, key) {
   const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
   const parts = [
     `## 오늘 날짜: ${today}`,
-    '- 행사·할인·팝업 기간이 오늘 이전에 끝났다면 "지금 가세요"가 아니라 지난 방문 후기(내년·다음 행사 참고용)로 쓴다. 기간이 남아 있으면 끝나는 날을 강조한다.',
+    '- 행사·할인·팝업 기간이 오늘 이전에 끝났다면 "지금 가세요"라고 쓰지 않는다. 단, 훅·첫 문장은 볼거리(풍경·음식·가격)로 시작하고, "올해는 ○일에 끝남·내년 참고"는 마지막 장면·설명란·마무리에만 한 번 쓴다. 기간이 남아 있으면 끝나는 날을 강조한다.',
     '',
     '## 촬영자 정보', hintText(project), '',
     '## 자료 분석 결과',
@@ -377,6 +377,18 @@ export function mockPlan(project) {
 
 // ---------- 정리·검증 ----------
 
+/** 장소 이름 해시태그: "2026 ○○강 억새축제" → "○○강억새축제" */
+function placeTag(name) {
+  return String(name || '').replace(/^\s*\d{4}\s*/, '').replace(/[\s#]/g, '').slice(0, 20);
+}
+/** 해시태그에 장소 이름이 없으면 맨 앞에 넣는다 (AI가 자주 빠뜨림) */
+function withPlaceTag(tags, plan, max) {
+  const tag = placeTag(plan.place_name);
+  if (tag.length < 2) return tags;
+  const core = tag.replace(/[○●◯]/g, '');
+  const has = tags.some((t) => t.replace(/[○●◯]/g, '').includes(core.slice(0, 3)) || t.replace(/[○●◯]/g, '').includes(core.slice(-3)));
+  return has ? tags : [tag, ...tags].slice(0, max);
+}
 const cleanTags = (t, max = 30) => [...new Set((t || []).map((x) => String(x).replace(/^#+/, '').replace(/\s+/g, '').trim()).filter(Boolean))].slice(0, max);
 const TAG_MAX = { shorts: 5, reels: 5, tiktok: 5, longform: 5, carousel: 5, blog: 15 };
 
@@ -426,20 +438,20 @@ export function finalizePlan(plan, project, only = null) {
       cur.scenes = scenes;
       cur.hook = String(cur.hook || '').replace(/\\n/g, '\n');
       if (cur.thumbnail_text !== undefined) cur.thumbnail_text = String(cur.thumbnail_text).replace(/\\n/g, '\n').trim();
-      cur.hashtags = cleanTags(cur.hashtags, TAG_MAX[k]);
+      cur.hashtags = withPlaceTag(cleanTags(cur.hashtags, TAG_MAX[k]), plan, TAG_MAX[k]);
     } else if (p.type === 'carousel') {
       cur.slides = (cur.slides || []).map((sl) => {
         const s = resolve(sl.shot);
         return s ? { shot: s.ref, headline: String(sl.headline || '').replace(/\\n/g, '\n').trim(), body: String(sl.body || '').trim() } : null;
       }).filter(Boolean).slice(0, 10);
       if (!cur.slides.length) cur.slides = spread(shots, 5).map((s) => ({ shot: s.ref, headline: '', body: '' }));
-      cur.hashtags = cleanTags(cur.hashtags, TAG_MAX.carousel);
+      cur.hashtags = withPlaceTag(cleanTags(cur.hashtags, TAG_MAX.carousel), plan, TAG_MAX.carousel);
     } else if (p.type === 'blog') {
       cur.sections = (cur.sections || []).map((sec) => {
         const s = sec.shot ? resolve(sec.shot) : null;
         return { heading: String(sec.heading || '').trim(), body: String(sec.body || '').trim(), shot: s ? s.ref : '' };
       });
-      cur.hashtags = cleanTags(cur.hashtags, TAG_MAX.blog);
+      cur.hashtags = withPlaceTag(cleanTags(cur.hashtags, TAG_MAX.blog), plan, TAG_MAX.blog);
     } else if (p.type === 'text') {
       cur.text = String(cur.text || '').trim();
       cur.topic_tag = String(cur.topic_tag || '').replace(/^#+/, '').trim();
