@@ -4,3 +4,4 @@ samples/
 .env
 *.log
 .DS_Store
+style-samples/

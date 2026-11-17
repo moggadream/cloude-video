@@ -49,6 +49,12 @@
     <div class="actions"><button class="primary big" id="go" disabled>영상과 글 만들기</button></div>
   </section>
 
+  <section class="card hidden" id="driveCard">
+    <h2>📁 드라이브 폴더</h2>
+    <p class="muted" style="margin-top:0">드라이브 "업로드" 폴더 안의 작업 폴더예요. 눌러서 바로 만들 수 있어요.</p>
+    <div class="list" id="driveList"></div>
+  </section>
+
   <section class="card">
     <h2>내 작업</h2>
     <div class="list" id="list"><p class="muted">불러오는 중…</p></div>
@@ -66,7 +72,7 @@ async function init() {
 
   const f = status.features;
   const missing = [];
-  if (!f.ai) missing.push('AI 분석(예시 글로 대신 만들어져요)');
+  if (!f.ai) missing.push('AI 분석(예시 글로 대신 만들어져요. API 키나 Claude Code 필요)');
   if (!f.voice) missing.push('AI 나레이션(자막만 나와요)');
   if (!f.aiMusic) missing.push('AI 배경음악(임시 음악 사용)');
   if (missing.length) {
@@ -79,7 +85,30 @@ async function init() {
     h('input', { type: 'radio', name: 'cat', id: `c_${k}`, value: k, checked: i === 0 }),
     h('label', { for: `c_${k}` }, v),
   ]));
+  if (status.ai) {
+    $('#modeNotice').prepend(h('p', { class: 'muted', style: 'margin:0 0 8px' }, `🤖 AI: ${status.ai.label}`));
+  }
   loadList();
+  if (status.drive) loadDrive();
+}
+
+async function loadDrive() {
+  const { folders } = await api('/api/drive/folders');
+  $('#driveCard').classList.remove('hidden');
+  if (!folders.length) return $('#driveList').replaceChildren(h('p', { class: 'muted' }, '아직 폴더가 없어요.'));
+  $('#driveList').replaceChildren(...folders.slice(0, 12).map((f) => {
+    const count = [f.images && `사진 ${f.images}`, f.videos && `영상 ${f.videos}`].filter(Boolean).join(', ') || '자료 없음';
+    const btn = h('button', { class: `small ${f.projectId ? '' : 'primary'}`, disabled: !(f.images + f.videos) || ['processing', 'queued'].includes(f.status), onclick: async () => {
+      if (f.projectId && !confirm('이미 만든 폴더예요. 다시 만들까요?')) return;
+      btn.disabled = true;
+      try { const r = await api('/api/drive/folders/make', { json: { name: f.name } }); location.href = `/project.html?id=${r.id}`; }
+      catch (e) { toast(e.message); btn.disabled = false; }
+    } }, f.projectId ? '🔁 다시 만들기' : '만들기');
+    return h('div', { class: 'item row', style: 'padding:10px 0;border-top:1px solid var(--line)' },
+      h('div', { class: 'grow' }, h('b', {}, f.name), h('div', { class: 'muted' }, count,
+        f.projectId ? h('span', {}, ' · ', h('a', { href: `/project.html?id=${f.projectId}` }, '결과 보기')) : '')),
+      btn);
+  }));
 }
 
 function renderThumbs() {

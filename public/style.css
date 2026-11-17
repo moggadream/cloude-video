@@ -102,3 +102,7 @@ button.big { width: 100%; justify-content: center; padding: 14px; font-size: 17p
 }
 .hidden { display: none !important; }
 details summary { cursor: pointer; font-weight: 700; }
+
+.carousel { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; }
+.carousel a { flex: none; width: 70%; max-width: 320px; scroll-snap-align: start; }
+.carousel img { width: 100%; aspect-ratio: 4/5; object-fit: cover; border-radius: 10px; display: block; }

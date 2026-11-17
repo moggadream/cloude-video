@@ -41,7 +41,7 @@ export async function addSubscription(sub) {
   await writeSubs(list);
 }
 
-export async function notify({ title, body, url }) {
+export async function notify({ title, body, url, skipTelegram = false }) {
   const results = { push: 0, telegram: false };
 
   // 브라우저 푸시
@@ -62,7 +62,7 @@ export async function notify({ title, body, url }) {
   if (alive.length !== subs.length) await writeSubs(alive);
 
   // 텔레그램
-  if (config.telegram.botToken && config.telegram.chatId) {
+  if (!skipTelegram && config.telegram.botToken && config.telegram.chatId) {
     const link = config.publicUrl ? `\n${config.publicUrl.replace(/\/$/, '')}${url}` : '';
     try {
       const res = await fetch(`https://api.telegram.org/bot${config.telegram.botToken}/sendMessage`, {

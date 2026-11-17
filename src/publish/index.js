@@ -6,6 +6,8 @@ export const PLATFORMS = {
   shorts: { name: 'YouTube', auto: false, note: '유튜브 계정 연결 후 자동 업로드 (2단계)' },
   longform: { name: 'YouTube', auto: false, note: '유튜브 계정 연결 후 자동 업로드 (2단계)' },
   reels: { name: 'Instagram', auto: false, note: '인스타그램 비즈니스 계정 연결 후 자동 업로드 (2단계)' },
+  tiktok: { name: 'TikTok', auto: false, note: '틱톡 계정 연결 후 자동 업로드 (2단계)' },
+  carousel: { name: 'Instagram', auto: false, note: '인스타그램 비즈니스 계정 연결 후 자동 업로드 (2단계)' },
   threads: { name: 'Threads', auto: false, note: '쓰레드 계정 연결 후 자동 게시 (2단계)' },
   blog: { name: '블로그', auto: false, note: '네이버 블로그는 자동 게시 API가 없어 복사해서 붙여넣기' },
 };

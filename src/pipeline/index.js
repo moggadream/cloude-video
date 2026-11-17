@@ -1,32 +1,36 @@
-// 업로드 1건을 처음부터 끝까지 처리한다: 미디어 정리 → AI 계획 → 영상 3종 → 글 2종 → 알림
+// 작업 1건을 처음부터 끝까지: 자료 정리 → AI 분석·대본 → 영상·이미지 → 드라이브 저장 → 알림
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { projectDir, getProject, updateProject } from '../store.js';
 import { prepareMedia } from './media.js';
-import { makePlan, sanitizePlan } from './plan.js';
+import { makePlan, finalizePlan, reviseOutput, PLATFORMS, PLATFORM_KEYS, VIDEO_KEYS, allShots } from './plan.js';
 import { renderVideo, FORMATS, fmtClock } from './render.js';
+import { renderCarousel } from './carousel.js';
+import { buildOutputs, textFor } from './texts.js';
+import { recordFeedback } from '../ai/skills.js';
+import { exportToDrive } from '../drive.js';
 import { notify } from '../notify.js';
+import { bus } from '../events.js';
 import { config } from '../config.js';
 
-export const OUTPUT_KEYS = ['shorts', 'longform', 'reels', 'threads', 'blog'];
-export const OUTPUT_LABELS = {
-  shorts: '유튜브 쇼츠',
-  longform: '유튜브 롱폼',
-  reels: '인스타그램 릴스',
-  threads: '쓰레드 글',
-  blog: '블로그 글',
-};
-const VIDEO_KEYS = ['shorts', 'reels', 'longform'];
+export const OUTPUT_KEYS = PLATFORM_KEYS;
+export const OUTPUT_LABELS = Object.fromEntries(PLATFORM_KEYS.map((k) => [k, PLATFORMS[k].label]));
+const RENDER_KEYS = PLATFORM_KEYS.filter((k) => ['video', 'carousel'].includes(PLATFORMS[k].type));
 
-const setStep = (id, step, progress) =>
-  updateProject(id, (p) => { p.step = step; p.progress = Math.round(progress * 100) / 100; });
+let lastStepAt = 0;
+async function setStep(id, step, progress) {
+  await updateProject(id, (p) => { p.step = step; p.progress = Math.round(progress * 100) / 100; });
+  // 알림 쪽에는 너무 자주 보내지 않는다
+  if (Date.now() - lastStepAt > 1500) { lastStepAt = Date.now(); bus.emit('step', id, step, progress); }
+}
 
 export async function processProject(id, opts = {}) {
   const dir = projectDir(id);
   try {
     await updateProject(id, (p) => { p.status = 'processing'; p.error = null; p.startedAt = new Date().toISOString(); });
+    bus.emit('started', id);
 
-    // 1) 미디어 정리
+    // 1) 자료 정리
     let project = await getProject(id);
     const media = [];
     for (const [i, m] of project.media.entries()) {
@@ -35,129 +39,167 @@ export async function processProject(id, opts = {}) {
     }
     project = await updateProject(id, (p) => { p.media = media; });
 
-    // 2) AI 분석 + 대본·글 작성
-    await setStep(id, 'AI가 사진을 보고 대본과 글을 쓰는 중', 0.12);
-    // opts.plan: 미리 작성한 계획을 그대로 쓸 때 (테스트용)
-    const plan = opts.plan ? sanitizePlan(structuredClone(opts.plan), project) : await makePlan(project, dir);
+    // 2) AI 분석 + 플랫폼별 대본 (opts.plan: 미리 써둔 계획을 쓸 때)
+    const plan = opts.plan
+      ? finalizePlan(structuredClone(opts.plan), project)
+      : await makePlan(project, dir, (step, r) => setStep(id, step, 0.1 + 0.3 * r).catch(() => {}));
     project = await updateProject(id, (p) => {
       p.plan = plan;
-      p.outputs = buildTextOutputs(p, plan);
+      p.outputs = buildOutputs(plan);
     });
 
-    // 3) 영상 3종
-    const weights = { shorts: 0.22, reels: 0.18, longform: 0.38 };
-    let base = 0.2;
-    for (const key of VIDEO_KEYS) {
-      const w = weights[key];
-      await setStep(id, `${OUTPUT_LABELS[key]} 만드는 중`, base);
-      await renderOne(id, key, (r) => setStep(id, `${OUTPUT_LABELS[key]} 만드는 중`, base + w * r).catch(() => {}));
+    // 3) 블로그 사진 (영상 장면 포함)
+    await exportBlogImages(project, dir);
+
+    // 4) 영상·캐러셀
+    const weight = { shorts: 0.1, reels: 0.08, tiktok: 0.08, longform: 0.24, carousel: 0.05 };
+    let base = 0.42;
+    for (const key of RENDER_KEYS) {
+      const w = weight[key] || 0.05;
+      const label = `${PLATFORMS[key].label} 만드는 중`;
+      await setStep(id, label, base);
+      try {
+        await renderOne(id, key, (r) => setStep(id, label, base + w * r).catch(() => {}), { silent: true });
+      } catch (err) {
+        // 하나가 실패해도 나머지는 계속 만든다
+        console.error(`[pipeline] ${id} ${key} 실패:`, err.message);
+      }
       base += w;
     }
 
-    // 4) 블로그용 사진 정리
-    await setStep(id, '블로그 사진 정리 중', 0.98);
-    await exportBlogImages(await getProject(id), dir);
+    // 5) 드라이브에 저장
+    project = await getProject(id);
+    await setStep(id, '드라이브에 저장 중', 0.98);
+    const drive = await exportToDrive(project).catch((err) => {
+      console.warn('[drive] 저장 실패:', err.message);
+      return null;
+    });
 
     project = await updateProject(id, (p) => {
       p.status = 'ready';
       p.step = '완성';
       p.progress = 1;
+      p.drive = drive;
       p.finishedAt = new Date().toISOString();
     });
+    bus.emit('ready', id);
     await notify({
       title: '영상과 글이 완성됐어요',
-      body: `${project.plan.place_name || '새 프로젝트'} · 결과물 5종을 확인하고 승인해 주세요.`,
+      body: `${project.plan.place_name || '새 작업'} · 결과물 ${PLATFORM_KEYS.length}종을 확인하고 승인해 주세요.`,
       url: `/project.html?id=${id}`,
-    });
+      skipTelegram: true, // 텔레그램은 telegram 모듈이 자세히 보낸다
+    }).catch(() => {});
   } catch (err) {
     console.error(`[pipeline] ${id} 실패`, err);
     await updateProject(id, (p) => { p.status = 'failed'; p.error = err.message; p.step = '실패'; });
-    await notify({ title: '제작에 실패했어요', body: err.message.slice(0, 120), url: `/project.html?id=${id}` }).catch(() => {});
+    bus.emit('failed', id, err.message);
+    await notify({ title: '제작에 실패했어요', body: err.message.slice(0, 120), url: `/project.html?id=${id}`, skipTelegram: true }).catch(() => {});
   }
 }
 
-/** 영상 하나를 (다시) 만든다 */
-export async function renderOne(id, key, onProgress) {
+/** 영상·캐러셀 하나를 (다시) 만든다 */
+export async function renderOne(id, key, onProgress = () => {}, { silent = false } = {}) {
   const dir = projectDir(id);
   const project = await getProject(id);
   await updateProject(id, (p) => { p.outputs[key].status = 'rendering'; p.outputs[key].error = null; });
   try {
-    const result = await renderVideo({
-      format: key,
-      script: project.plan[key],
-      project,
-      dir,
-      musicPrompt: project.plan.music_prompt,
-      onProgress,
-    });
-    await updateProject(id, (p) => {
-      const o = p.outputs[key];
-      Object.assign(o, { status: 'ready', video: result, version: (o.version || 0) + 1 });
-      // 승인 후 다시 만든 경우 다시 확인받도록
-      if (o.approval === 'approved') o.approval = 'pending';
-      if (key === 'longform') o.body = longformBody(p.plan.longform, result.chapters);
-    });
+    if (PLATFORMS[key].type === 'carousel') {
+      const result = await renderCarousel({ script: project.plan.carousel, project, dir });
+      await updateProject(id, (p) => {
+        const o = p.outputs[key];
+        Object.assign(o, { status: 'ready', images: result.images, size: [result.width, result.height], version: (o.version || 0) + 1 });
+        if (o.approval === 'approved') o.approval = 'pending';
+      });
+    } else {
+      const result = await renderVideo({
+        format: key,
+        script: project.plan[key],
+        project,
+        dir,
+        musicPrompt: project.plan.music_prompt,
+        onProgress,
+      });
+      await updateProject(id, (p) => {
+        const o = p.outputs[key];
+        Object.assign(o, { status: 'ready', video: result, version: (o.version || 0) + 1 });
+        // 승인 후 다시 만든 경우 다시 확인받도록
+        if (o.approval === 'approved') o.approval = 'pending';
+        if (key === 'longform') Object.assign(o, textFor(key, p.plan, { chapters: result.chapters }));
+      });
+    }
   } catch (err) {
     await updateProject(id, (p) => { p.outputs[key].status = 'failed'; p.outputs[key].error = err.message; });
+    if (!silent) bus.emit('output-failed', id, key, err.message);
+    throw err;
+  }
+  if (!silent) {
+    await syncDrive(id);
+    bus.emit('output', id, key);
+  }
+}
+
+async function syncDrive(id) {
+  const p = await getProject(id);
+  const drive = await exportToDrive(p).catch(() => null);
+  if (drive) await updateProject(id, (x) => { x.drive = drive; });
+}
+
+/**
+ * 말로 한 수정 요청 반영 (텔레그램 "수정" 등): AI가 그 결과물만 다시 쓰고, 영상이면 다시 만든다
+ */
+export async function reviseAndRender(id, key, instruction) {
+  const project = await getProject(id);
+  if (!project?.plan) throw new Error('아직 계획이 없어요');
+  await updateProject(id, (p) => { p.outputs[key].status = 'queued'; p.outputs[key].error = null; });
+  try {
+    const plan = await reviseOutput(project, key, instruction);
+    await recordFeedback({ key, instruction, projectId: id });
+    await updateProject(id, (p) => {
+      p.plan = plan;
+      const o = p.outputs[key];
+      Object.assign(o, textFor(key, plan, { chapters: o.video?.chapters }));
+      o.revisions = [...(o.revisions || []), { at: new Date().toISOString(), instruction }];
+      if (o.approval === 'approved') o.approval = 'pending';
+      if (!['video', 'carousel'].includes(PLATFORMS[key].type)) o.status = 'ready';
+    });
+    if (['video', 'carousel'].includes(PLATFORMS[key].type)) {
+      await renderOne(id, key);
+    } else {
+      if (key === 'blog') await exportBlogImages(await getProject(id), projectDir(id));
+      await syncDrive(id);
+      bus.emit('output', id, key);
+    }
+  } catch (err) {
+    await updateProject(id, (p) => {
+      const o = p.outputs[key];
+      o.status = o.video || o.images || !['video', 'carousel'].includes(PLATFORMS[key].type) ? 'ready' : 'failed';
+      o.error = err.message;
+    });
+    bus.emit('output-failed', id, key, err.message);
     throw err;
   }
 }
 
-const tagLine = (tags) => tags.map((t) => `#${t}`).join(' ');
-
-function longformBody(script, chapters = []) {
-  const parts = [script.description.trim()];
-  if (chapters.length) parts.push(chapters.map((c) => `${c.label} ${c.title}`).join('\n'));
-  if (script.hashtags.length) parts.push(tagLine(script.hashtags));
-  return parts.filter(Boolean).join('\n\n');
+/** 승인 상태 바꾸기: 'approved' | 'rejected' | 'pending' */
+export async function setApproval(id, key, approval) {
+  const p = await updateProject(id, (x) => {
+    x.outputs[key].approval = approval;
+    if (approval === 'approved') x.outputs[key].approvedAt = new Date().toISOString();
+  });
+  return p.outputs[key];
 }
 
-/** 각 결과물의 제목/본문 초기값. 확인 화면에서 수정할 수 있다. */
-function buildTextOutputs(project, plan) {
-  const base = (extra) => ({ status: 'ready', approval: 'pending', publish: null, error: null, ...extra });
-  const shortsTags = plan.shorts.hashtags.includes('shorts') ? plan.shorts.hashtags : [...plan.shorts.hashtags, 'shorts'];
-  return {
-    shorts: base({
-      status: 'queued',
-      title: plan.shorts.title.slice(0, 100),
-      body: [plan.shorts.description.trim(), tagLine(shortsTags)].filter(Boolean).join('\n\n'),
-    }),
-    longform: base({ status: 'queued', title: plan.longform.title.slice(0, 100), body: longformBody(plan.longform) }),
-    reels: base({
-      status: 'queued',
-      title: '',
-      body: [plan.reels.description.trim(), tagLine(plan.reels.hashtags)].filter(Boolean).join('\n\n'),
-    }),
-    threads: base({ title: '', body: plan.threads.text.trim() }),
-    blog: base({ title: plan.blog.title, body: blogMarkdown(plan.blog, project) }),
-  };
-}
-
-function blogMarkdown(blog, project) {
-  const out = [];
-  const used = new Set();
-  for (const s of blog.sections) {
-    if (s.media_id) { out.push(`[사진: ${s.media_id}]`); used.add(s.media_id.split(':')[0]); }
-    if (s.heading) out.push(`## ${s.heading}`);
-    out.push(s.body.trim(), '');
-  }
-  if (blog.hashtags.length) out.push(tagLine(blog.hashtags));
-  return out.join('\n').trim();
-}
-
-/** 블로그에 올릴 사진을 out/blog/ 에 저장 (영상은 가운데 장면) */
+/** 블로그 사진: 모든 사진과 영상 장면을 out/blog/ 에 (m3.jpg, m1_f5.jpg) */
 async function exportBlogImages(project, dir) {
   const outDir = path.join(dir, 'out', 'blog');
   await fs.mkdir(outDir, { recursive: true });
-  for (const m of project.media) {
-    const src = m.kind === 'image' ? m.normalized : (m.frames[1] || m.frames[0]).file;
-    await fs.copyFile(path.join(dir, 'work', src), path.join(outDir, `${m.id}.jpg`));
-    // 영상은 분석한 장면들도 사진으로 저장 (m1_f3.jpg)
-    if (m.kind === 'video') {
-      for (const [i, f] of m.frames.entries()) {
-        await fs.copyFile(path.join(dir, 'work', f.file), path.join(outDir, `${m.id}_f${i}.jpg`));
-      }
-    }
+  for (const s of allShots(project)) {
+    await fs.copyFile(path.join(dir, 'work', s.frame.file), path.join(outDir, `${s.ref.replace(':', '_')}.jpg`));
+  }
+  // 예전 형식 호환: 영상 ID만으로도 대표 장면을
+  for (const m of project.media.filter((x) => x.kind === 'video')) {
+    const f = m.frames[1] || m.frames[0];
+    await fs.copyFile(path.join(dir, 'work', f.file), path.join(outDir, `${m.id}.jpg`));
   }
 }
 
@@ -165,4 +207,4 @@ export function publicLink(p) {
   return config.publicUrl ? `${config.publicUrl.replace(/\/$/, '')}${p}` : p;
 }
 
-export { FORMATS, fmtClock };
+export { FORMATS, fmtClock, VIDEO_KEYS };

@@ -9,6 +9,8 @@ import { narrate, makeMusic } from './audio.js';
 export const FORMATS = {
   shorts: { label: '유튜브 쇼츠', w: 1080, h: 1920, maxTotal: 59, minScene: 2.2, maxScene: 7, captionMargin: 420 },
   reels: { label: '인스타그램 릴스', w: 1080, h: 1920, maxTotal: 90, minScene: 2.0, maxScene: 6, captionMargin: 460 },
+  // 틱톡은 오른쪽 버튼·아래쪽 캡션이 화면을 가려서 글자를 더 안쪽·위쪽에 둔다
+  tiktok: { label: '틱톡', w: 1080, h: 1920, maxTotal: 90, minScene: 2.0, maxScene: 6, captionMargin: 600, marginL: 70, marginR: 190 },
   longform: { label: '유튜브 롱폼', w: 1920, h: 1080, maxTotal: 1800, minScene: 3.5, maxScene: 20, captionMargin: 90 },
 };
 
@@ -234,7 +236,12 @@ function assTime(t) {
   return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(cs % 100).padStart(2, '0')}`;
 }
 
-const assText = (s) => String(s).replace(/\\/g, '＼').replace(/[{}]/g, '').replace(/\r?\n/g, '\\N');
+// 화면 글자: 자막 글꼴에 없는 이모지는 빼고(네모로 깨짐), ASS 특수문자 처리
+export const assText = (s) => String(s)
+  .replace(/[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{FE0F}\u{200D}\u{20E3}]/gu, '')
+  .replace(/[ \t]{2,}/g, ' ')
+  .trim()
+  .replace(/\\/g, '＼').replace(/[{}]/g, '').replace(/\r?\n/g, '\\N');
 
 function buildAss(scenes, script, fmt, format) {
   const vertical = fmt.h > fmt.w;
@@ -264,7 +271,7 @@ function buildAss(scenes, script, fmt, format) {
     '[V4+ Styles]',
     'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
     ...styles.map(([n, f, size, pc, oc, bc, bold, bs, ol, sh, al, mv]) =>
-      `Style: ${n},${f},${size},${pc},&H000000FF,${oc},${bc},${bold ? -1 : 0},0,0,0,100,100,0,0,${bs},${ol},${sh},${al},${sideMargin},${sideMargin},${mv},1`),
+      `Style: ${n},${f},${size},${pc},&H000000FF,${oc},${bc},${bold ? -1 : 0},0,0,0,100,100,0,0,${bs},${ol},${sh},${al},${fmt.marginL ?? sideMargin},${fmt.marginR ?? sideMargin},${mv},1`),
     '',
     '[Events]',
     'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
@@ -289,7 +296,7 @@ function buildAss(scenes, script, fmt, format) {
   return [...header, ...ev, ''].join('\n');
 }
 
-function escapeFilterPath(p) {
+export function escapeFilterPath(p) {
   return p.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'").replace(/,/g, '\\,');
 }
 

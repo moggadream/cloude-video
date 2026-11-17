@@ -27,9 +27,27 @@ export const config = {
   ffmpegPath: env('FFMPEG_PATH', 'ffmpeg'),
   ffprobePath: env('FFPROBE_PATH', '') || ffprobeNextTo(env('FFMPEG_PATH', '')),
 
+  // AI 방식: auto(API 키 → 내 컴퓨터 Claude Code → 테스트 모드 순서로 자동 선택) | api | claude-code | off
+  aiMode: env('AI_MODE', 'auto'),
   anthropic: {
     apiKey: env('ANTHROPIC_API_KEY'),
     model: env('CLAUDE_MODEL', 'claude-opus-5-5'),
+  },
+  claudeCode: {
+    // claude 실행 파일 위치. 비워두면 PATH에서 찾는다
+    cli: env('CLAUDE_CLI'),
+    // 비워두면 Claude Code 기본 모델. 사용량을 아끼려면 sonnet
+    model: env('CLAUDE_CODE_MODEL'),
+    timeoutSec: Number(env('CLAUDE_CODE_TIMEOUT', '900')),
+  },
+  drive: {
+    // 구글 드라이브 데스크톱으로 연결된 작업 폴더. 예: G:\\내 드라이브\\콘텐츠
+    // 이 안의 "업로드" 폴더에 작업별 폴더를 만들어 자료를 넣고, 결과는 "결과" 폴더에 저장된다
+    dir: env('DRIVE_DIR'),
+    uploadName: env('DRIVE_UPLOAD_FOLDER', '업로드'),
+    resultName: env('DRIVE_RESULT_FOLDER', '결과'),
+    // 드라이브 웹에서 "결과" 폴더를 열었을 때의 주소 (텔레그램 버튼 링크)
+    resultUrl: env('DRIVE_RESULT_URL'),
   },
   elevenlabs: {
     apiKey: env('ELEVENLABS_API_KEY'),
@@ -40,7 +58,9 @@ export const config = {
   },
   telegram: {
     botToken: env('TELEGRAM_BOT_TOKEN'),
+    // 이 채팅에서 온 지시만 받는다 (봇에게 /start 를 보내면 알려줌)
     chatId: env('TELEGRAM_CHAT_ID'),
+    apiBase: env('TELEGRAM_API_BASE', 'https://api.telegram.org'),
   },
   vapid: {
     publicKey: env('VAPID_PUBLIC_KEY'),
@@ -50,6 +70,7 @@ export const config = {
 };
 
 export const features = {
+  // 실제 AI 사용 여부는 src/ai/index.js 의 aiBackend() 로 확인 (Claude Code 감지는 비동기)
   get ai() { return Boolean(config.anthropic.apiKey); },
   get voice() { return Boolean(config.elevenlabs.apiKey); },
   get aiMusic() { return Boolean(config.elevenlabs.apiKey) && config.elevenlabs.music; },

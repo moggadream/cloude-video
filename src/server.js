@@ -8,9 +8,12 @@ import {
   createProject, getProject, listProjects, updateProject, deleteProject, projectDir, isValidId,
 } from './store.js';
 import { enqueue, queueLength } from './queue.js';
-import { processProject, renderOne, OUTPUT_KEYS, OUTPUT_LABELS } from './pipeline/index.js';
+import { processProject, renderOne, reviseAndRender, OUTPUT_KEYS, OUTPUT_LABELS, VIDEO_KEYS } from './pipeline/index.js';
+import { aiStatus } from './ai/index.js';
+import { driveReady, listUploadFolders, createProjectFromFolder, ensureDriveFolders } from './drive.js';
+import { startTelegram } from './telegram/bot.js';
 import { kindOf } from './pipeline/media.js';
-import { CATEGORIES } from './pipeline/plan.js';
+import { CATEGORIES, PLATFORMS } from './pipeline/plan.js';
 import { addSubscription, getVapid, notify } from './notify.js';
 import { publishOutput, platformStatus } from './publish/index.js';
 
@@ -41,8 +44,11 @@ app.get('/api/status', async (req, res) => {
   res.json({
     authed: isAuthed(req),
     passwordRequired: Boolean(config.appPassword),
-    features: { ai: features.ai, voice: features.voice, aiMusic: features.aiMusic },
+    features: { ai: (await aiStatus()).backend !== 'off', voice: features.voice, aiMusic: features.aiMusic },
+    ai: await aiStatus(),
+    drive: driveReady(),
     telegram: Boolean(config.telegram.botToken && config.telegram.chatId),
+    platformTypes: Object.fromEntries(Object.entries(PLATFORMS).map(([k, v]) => [k, v.type])),
     vapidPublicKey: (await getVapid()).publicKey,
     platforms: platformStatus(),
     categories: CATEGORIES,
@@ -157,11 +163,12 @@ app.patch('/api/projects/:id/outputs/:key', loadProject, checkKey, async (req, r
 // 영상 장면(나레이션/자막/가격) 수정 → 다시 만들기
 app.put('/api/projects/:id/plan/:key', loadProject, checkKey, async (req, res) => {
   const key = req.params.key;
-  if (!['shorts', 'reels', 'longform'].includes(key)) return res.status(400).json({ error: '영상만 장면을 고칠 수 있어요' });
+  if (!VIDEO_KEYS.includes(key)) return res.status(400).json({ error: '영상만 장면을 고칠 수 있어요' });
   const { hook, scenes } = req.body || {};
   if (!Array.isArray(scenes) || scenes.length === 0) return res.status(400).json({ error: '장면이 비어 있어요' });
   const ids = new Set(req.project.media.map((m) => m.id));
   const clean = scenes.filter((s) => ids.has(s.media_id)).slice(0, 80).map((s) => ({
+    shot: typeof s.shot === 'string' ? s.shot : undefined,
     media_id: s.media_id,
     clip_start: Math.max(0, Number(s.clip_start) || 0),
     narration: String(s.narration || '').slice(0, 500),
@@ -171,6 +178,7 @@ app.put('/api/projects/:id/plan/:key', loadProject, checkKey, async (req, res) =
   }));
   await updateProject(req.project.id, (p) => {
     if (typeof hook === 'string') p.plan[key].hook = hook.slice(0, 60);
+    // 화면에서 고친 장면은 이미 변환된 형태라 shot 정보가 없을 수 있다
     p.plan[key].scenes = clean;
     p.outputs[key].status = 'queued';
   });
@@ -180,10 +188,34 @@ app.put('/api/projects/:id/plan/:key', loadProject, checkKey, async (req, res) =
 
 app.post('/api/projects/:id/outputs/:key/rerender', loadProject, checkKey, async (req, res) => {
   const key = req.params.key;
-  if (!['shorts', 'reels', 'longform'].includes(key)) return res.status(400).json({ error: '영상만 다시 만들 수 있어요' });
+  if (!['video', 'carousel'].includes(PLATFORMS[key].type)) return res.status(400).json({ error: '영상·이미지만 다시 만들 수 있어요' });
   await updateProject(req.project.id, (p) => { p.outputs[key].status = 'queued'; });
   enqueue(`rerender ${req.project.id} ${key}`, () => renderOne(req.project.id, key)).catch(() => {});
   res.json({ ok: true });
+});
+
+// 말로 수정 요청 → AI가 다시 쓰고 다시 만들기
+app.post('/api/projects/:id/outputs/:key/revise', loadProject, checkKey, async (req, res) => {
+  const instruction = String(req.body?.instruction || '').trim().slice(0, 1000);
+  if (!instruction) return res.status(400).json({ error: '수정할 내용을 적어 주세요' });
+  if ((await aiStatus()).backend === 'off') return res.status(409).json({ error: 'AI가 연결돼 있어야 말로 수정할 수 있어요' });
+  await updateProject(req.project.id, (p) => { p.outputs[req.params.key].status = 'queued'; });
+  enqueue(`revise ${req.project.id} ${req.params.key}`, () => reviseAndRender(req.project.id, req.params.key, instruction)).catch(() => {});
+  res.json({ ok: true });
+});
+
+// ---------- 드라이브 폴더 ----------
+app.get('/api/drive/folders', async (req, res) => {
+  res.json({ ready: driveReady(), folders: await listUploadFolders() });
+});
+app.post('/api/drive/folders/make', async (req, res) => {
+  try {
+    const id = await createProjectFromFolder(String(req.body?.name || ''));
+    enqueue(`drive ${id}`, () => processProject(id)).catch(() => {});
+    res.json({ id });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // 승인 → 게시
@@ -278,9 +310,14 @@ async function recoverInterrupted() {
 
 await fs.mkdir(config.dataDir, { recursive: true });
 await recoverInterrupted();
+await ensureDriveFolders().catch((err) => console.warn('[drive] 폴더 만들기 실패:', err.message));
 await getVapid();
-app.listen(config.port, () => {
+app.listen(config.port, async () => {
+  const ai = await aiStatus();
   console.log(`\n🎬 cloude-video 실행 중: http://localhost:${config.port}`);
-  console.log(`   AI 분석: ${features.ai ? '켜짐' : '꺼짐 (예시 데이터 사용)'} · 나레이션: ${features.voice ? '켜짐' : '꺼짐'} · AI 음악: ${features.aiMusic ? '켜짐' : '꺼짐 (내장 음악)'}`);
+  console.log(`   AI: ${ai.label}${ai.cliVersion ? ` (${ai.cliVersion})` : ''} · 나레이션: ${features.voice ? '켜짐' : '꺼짐'} · AI 음악: ${features.aiMusic ? '켜짐' : '꺼짐 (내장 음악)'}`);
+  console.log(`   드라이브: ${driveReady() ? config.drive.dir : '연결 안 됨 (DRIVE_DIR)'}`);
+  if (config.telegram.botToken) await startTelegram();
+  else console.log('   텔레그램: 꺼짐 (TELEGRAM_BOT_TOKEN)');
   if (!config.appPassword) console.log('   ⚠️  APP_PASSWORD가 없어 누구나 접속할 수 있어요. 인터넷에 공개할 때는 꼭 설정하세요.');
 });

@@ -27,8 +27,8 @@
 import { api, $, h, toast, copyText, STATUS, APPROVAL, pill, showLogin } from '/common.js';
 
 const id = new URLSearchParams(location.search).get('id');
-const KEYS = ['shorts', 'longform', 'reels', 'threads', 'blog'];
-const VIDEO = new Set(['shorts', 'reels', 'longform']);
+let KEYS = ['shorts', 'reels', 'tiktok', 'longform', 'carousel', 'threads', 'blog'];
+let VIDEO = new Set(['shorts', 'reels', 'tiktok', 'longform']);
 let status, project, current = 'shorts', dirty = false, sig = '';
 
 const file = (area, name) => `/files/${id}/${area}/${name}`;
@@ -56,7 +56,7 @@ function renderStatus() {
     const approved = Object.values(project.outputs).filter((o) => o.approval === 'approved').length;
     c.replaceChildren(
       h('h1', { style: 'margin:0 0 4px' }, project.plan?.place_name || project.hints?.placeName || '완성된 결과물'),
-      h('p', { class: 'muted', style: 'margin:0' }, `결과물 5개 중 ${approved}개 승인됨. 하나씩 확인하고 승인해 주세요.`));
+      h('p', { class: 'muted', style: 'margin:0' }, `결과물 ${Object.keys(project.outputs).length}개 중 ${approved}개 승인됨. 하나씩 확인하고 승인해 주세요.`));
   } else if (project.status === 'failed') {
     c.replaceChildren(
       h('h2', {}, '제작에 실패했어요'),
@@ -79,8 +79,9 @@ function renderSummary() {
   card.replaceChildren(
     h('details', {},
       h('summary', {}, `AI 분석 결과 · ${status.categories[p.category] || p.category}`),
-      p._source === 'mock' ? h('div', { class: 'notice warn', style: 'margin-top:10px' }, 'API 키가 없어 예시 글로 만들었어요. 키를 넣으면 사진 내용을 보고 진짜 글이 써져요.') : null,
+      p._source === 'mock' ? h('div', { class: 'notice warn', style: 'margin-top:10px' }, 'AI가 연결되지 않아 예시 글로 만들었어요. API 키를 넣거나 내 컴퓨터에 Claude Code가 있으면 진짜 글이 써져요.') : null,
       h('p', {}, p.summary),
+      p.key_facts?.length ? h('ul', {}, ...p.key_facts.map((f) => h('li', {}, f))) : null,
       h('div', {}, ...p.media_notes.map((n) => h('p', { class: 'muted' },
         h('b', {}, n.media_id), ` ${n.description}`,
         n.items?.length ? ` · ${n.items.map((i) => `${i.name}${i.price ? ` ${i.price}` : ''}`).join(', ')}` : '')))));
@@ -89,7 +90,7 @@ function renderSummary() {
 function renderTabs() {
   if (!project.outputs || !Object.keys(project.outputs).length) return $('#outputsWrap').classList.add('hidden');
   $('#outputsWrap').classList.remove('hidden');
-  $('#tabs').replaceChildren(...KEYS.map((k) => {
+  $('#tabs').replaceChildren(...KEYS.filter((k) => project.outputs[k]).map((k) => {
     const o = project.outputs[k];
     const mark = o.approval === 'approved' ? ' ✅' : o.approval === 'rejected' ? ' ⏸' : o.status === 'rendering' || o.status === 'queued' ? ' ⏳' : '';
     return h('button', { class: `small ${k === current ? 'on' : ''}`, onclick: () => { if (dirty && !confirm('저장하지 않은 수정이 있어요. 이동할까요?')) return; dirty = false; current = k; renderTabs(); renderPanel(); } }, status.outputLabels[k] + mark);
@@ -116,6 +117,22 @@ function usageInfo(k, v) {
         h('div', { class: 't' }, h('img', { src: mediaThumb(m), alt: '', loading: 'lazy' }), h('span', { class: 'badge' }, m.id)),
         why ? h('div', { style: 'font-size:11px;margin-top:2px' }, why) : null);
     })));
+}
+
+// 말로 수정 요청 (AI가 다시 쓰고 다시 만듦)
+function reviseBox(k, o) {
+  const ta = h('textarea', { rows: 2, placeholder: '예) 첫 장면을 딸기로 바꾸고 자막을 더 짧게 / 말투를 더 친근하게' });
+  const btn = h('button', { class: 'primary', onclick: async () => {
+    if (!ta.value.trim()) return toast('고칠 내용을 적어 주세요');
+    btn.disabled = true;
+    try {
+      await api(`/api/projects/${id}/outputs/${k}/revise`, { json: { instruction: ta.value } });
+      toast('AI가 고치는 중이에요'); sig = ''; dirty = false; load();
+    } catch (e) { toast(e.message); btn.disabled = false; }
+  } }, '✏️ AI에게 고쳐 달라고 하기');
+  return h('details', { style: 'margin-top:12px' }, h('summary', {}, '✏️ 말로 수정 요청'),
+    o.revisions?.length ? h('p', { class: 'muted' }, `지난 요청: ${o.revisions.map((r) => `"${r.instruction}"`).slice(-3).join(', ')}`) : null,
+    ta, h('div', { class: 'actions' }, btn));
 }
 
 function approvalBlock(k, o) {
@@ -166,7 +183,7 @@ function textFields(k, o, { title = true, limit } = {}) {
   return [
     title ? h('label', { class: 'f', for: 'f_title' }, '제목') : null,
     title ? h('input', { type: 'text', id: 'f_title', value: o.title || '', oninput: () => { dirty = true; } }) : null,
-    h('label', { class: 'f', for: 'f_body' }, k === 'reels' ? '캡션' : k === 'threads' ? '글' : k === 'blog' ? '본문 ([사진: m1] 자리에 사진이 들어가요)' : '설명'),
+    h('label', { class: 'f', for: 'f_body' }, ['reels', 'tiktok', 'carousel'].includes(k) ? '캡션' : k === 'threads' ? '글' : k === 'blog' ? '본문 ([사진: m1] 자리에 사진이 들어가요)' : '설명'),
     body,
     h('div', { class: 'row', style: 'justify-content:space-between;margin-top:6px' }, count,
       h('button', { class: 'small', onclick: () => saveText(k).catch((e) => toast(e.message)) }, '💾 저장')),
@@ -192,19 +209,36 @@ function renderPanel() {
       v ? usageInfo(k, v) : null,
       v ? h('p', { class: 'muted' }, `${Math.floor(v.duration / 60)}분 ${Math.round(v.duration % 60)}초 · ${v.width}×${v.height} · 나레이션 ${v.voice ? '있음' : '없음(키 필요)'} · 음악 ${v.music === 'ai' ? 'AI 작곡' : '임시 음악'}`) : null,
       approvalBlock(k, o),
-      ...textFields(k, o, { title: k !== 'reels', limit: k === 'reels' ? 2200 : 5000 }),
+      ...textFields(k, o, { title: !['reels', 'tiktok'].includes(k), limit: k === 'reels' ? 2200 : k === 'tiktok' ? 4000 : 5000 }),
       h('div', { class: 'actions' },
         ...approveButtons(k, o),
         v ? h('a', { class: 'btn', href: file('out', v.file), download: `${k}.mp4` }, '⬇ 영상 받기') : null,
         h('button', { onclick: () => copyText([o.title, $('#f_body').value].filter(Boolean).join('\n\n')) }, '📋 글 복사')),
+      reviseBox(k, o),
       sceneEditor(k));
+  } else if (k === 'carousel') {
+    const busy = o.status === 'queued' || o.status === 'rendering';
+    panel.replaceChildren(
+      h('h2', {}, status.outputLabels[k]),
+      busy ? h('div', { class: 'notice' }, '⏳ 이미지를 만드는 중이에요…') : null,
+      o.status === 'failed' ? h('div', { class: 'notice warn' }, `이미지 제작 실패: ${o.error || ''}`) : null,
+      o.images?.length ? h('div', { class: 'carousel' }, ...o.images.map((n) =>
+        h('a', { href: `${file('out', `carousel/${n}`)}?v=${o.version}`, download: n },
+          h('img', { src: `${file('out', `carousel/${n}`)}?v=${o.version}`, alt: n, loading: 'lazy' })))) : null,
+      approvalBlock(k, o),
+      ...textFields(k, o, { title: false, limit: 2200 }),
+      h('div', { class: 'actions' }, ...approveButtons(k, o),
+        h('button', { onclick: () => copyText($('#f_body').value) }, '📋 캡션 복사')),
+      reviseBox(k, o));
   } else if (k === 'threads') {
     panel.replaceChildren(
       h('h2', {}, '쓰레드 글'),
       approvalBlock(k, o),
       ...textFields(k, o, { title: false, limit: 500 }),
+      o.topic ? h('p', { class: 'muted' }, `주제 태그: ${o.topic}`) : null,
       h('div', { class: 'actions' }, ...approveButtons(k, o),
-        h('button', { onclick: () => copyText($('#f_body').value) }, '📋 복사')));
+        h('button', { onclick: () => copyText($('#f_body').value) }, '📋 복사')),
+      reviseBox(k, o));
   } else if (k === 'blog') {
     panel.replaceChildren(
       h('h2', {}, '블로그 글'),
@@ -218,7 +252,8 @@ function renderPanel() {
       h('details', { style: 'margin-top:14px' }, h('summary', {}, '블로그용 사진 받기'),
         h('div', { class: 'thumbs' }, ...blogPhotos().map((name) =>
           h('a', { class: 't', href: file('out', `blog/${name}.jpg`), download: `${name}.jpg` },
-            h('img', { src: file('out', `blog/${name}.jpg`), alt: name, loading: 'lazy' }), h('span', { class: 'badge' }, name.replace('_', ':')))))));
+            h('img', { src: file('out', `blog/${name}.jpg`), alt: name, loading: 'lazy' }), h('span', { class: 'badge' }, name.replace('_', ':')))))),
+      reviseBox(k, o));
     renderBlogPreview();
   }
 }
@@ -310,6 +345,10 @@ window.addEventListener('beforeunload', (e) => { if (dirty) e.preventDefault(); 
 
 (async () => {
   status = await api('/api/status');
+  if (status.platformTypes) {
+    KEYS = Object.keys(status.platformTypes);
+    VIDEO = new Set(KEYS.filter((k) => status.platformTypes[k] === 'video'));
+  }
   if (!status.authed) return showLogin();
   if (!id) return toast('잘못된 주소예요');
   await load();
