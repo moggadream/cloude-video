@@ -74,7 +74,7 @@ export function lintOutput(key, out, plan, project) {
   if (unknown.length) add(unknown.length > 2 ? 'error' : 'warn', `자료에 없는 금액: ${unknown.slice(0, 6).map((n) => `${n.toLocaleString()}원`).join(', ')} (계산한 값이 아니라면 확인 필요)`);
 
   // 3) 같은 어미 반복: 평범한 "~요"(어요/에요/해요 등) 문장이 계속 이어지는지
-  const SPECIAL = /(더라고요|거든요|네요|죠|던데요|잖아요|는데요|군요|래요)$/;
+  const SPECIAL = /(더라고요|거든요|네요|죠|지요|던데요|잖아요|는데요|군요|래요|고요|구요|나요|까요|세요|데요)$/;
   const sentences = (key === 'blog' || key === 'threads' ? text : '')
     .split(/(?<=[.!?])\s+|\n+/).map((s) => s.trim().replace(/[.!?~)\s]+$/, '')).filter((s) => s.length > 6);
   let run = 0;

@@ -5,6 +5,7 @@ import { loadSkill } from '../ai/skills.js';
 import { config } from '../config.js';
 import { PLATFORMS, PLATFORM_KEYS, contextText, toShotForm, reviseOutput } from './plan.js';
 import { lintPlan } from './lint.js';
+import { factCheckBlog } from './factcheck.js';
 
 const Score = z.number().min(1).max(5);
 const ReviewSchema = z.object({
@@ -37,6 +38,16 @@ export async function aiReview(project, plan, lint) {
     schema: ReviewSchema,
     label: '자체 검증',
   });
+}
+
+async function recheck(project, plan) {
+  if (process.env.FACTCHECK === 'off') return;
+  try {
+    const fc = await factCheckBlog(project, plan);
+    console.log(`[factcheck] 다시 쓴 블로그 ${fc.applied}문장 고침`);
+  } catch (err) {
+    console.warn('[factcheck] 다시 확인 실패:', err.message);
+  }
 }
 
 /**
@@ -75,6 +86,8 @@ export async function selfReview(project, plan, onStep = () => {}) {
     try {
       current = await reviseOutput(project, k, fixes.map((f) => `- ${f}`).join('\n'), { plan: current, auto: true });
       revised.push(k);
+      // 블로그를 다시 쓰면 새 지어내기가 섞일 수 있어 사실 확인을 다시
+      if (k === 'blog') await recheck(project, current);
     } catch (err) {
       console.warn(`[review] ${k} 보완 실패:`, err.message);
     }
@@ -91,6 +104,7 @@ export async function selfReview(project, plan, onStep = () => {}) {
         '- 내용(사실)은 바꾸지 말고 위 형식 문제만 고칠 것. 분량을 늘릴 때는 장면 목록에 보이는 사실만 쓸 것.',
       ].join('\n'), { plan: current, auto: true });
       if (!revised.includes(k)) revised.push(k);
+      if (k === 'blog') await recheck(project, current);
     } catch (err) {
       console.warn(`[review] ${k} 마무리 손질 실패:`, err.message);
     }
