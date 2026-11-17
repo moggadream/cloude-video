@@ -5,7 +5,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { ROOT } from '../src/config.js';
 import { PLATFORMS, PLATFORM_KEYS, writeAll, finalizePlan } from '../src/pipeline/plan.js';
-import { selfReview } from '../src/pipeline/review.js';
+import { selfReview, aiReview } from '../src/pipeline/review.js';
 import { lintPlan } from '../src/pipeline/lint.js';
 import { aiStatus } from '../src/ai/index.js';
 
@@ -51,7 +51,27 @@ function outputMd(key, o) {
   return [`**제목**: ${o.title}`, '', ...o.sections.map((s) => `${s.shot ? `[사진 ${s.shot}]\n` : ''}#### ${s.heading}\n${s.body}`), '', `**해시태그**: ${o.hashtags.map((x) => `#${x}`).join(' ')}`].join('\n\n');
 }
 
-for (const name of names) {
+// 사용량 한도에 걸리면 초기화 시각까지 기다렸다가 다시 시도
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function withLimitWait(fn) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try { return await fn(); } catch (err) {
+      const m = String(err.message).match(/limit.*resets\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*\(UTC\)/i);
+      if (!m) throw err;
+      let h = Number(m[1]) % 12 + (/pm/i.test(m[3] || '') ? 12 : 0);
+      const reset = new Date(); reset.setUTCHours(h, Number(m[2] || 0), 0, 0);
+      if (reset <= new Date()) reset.setUTCDate(reset.getUTCDate() + 1);
+      const wait = reset - Date.now() + 3 * 60_000;
+      console.log(`=== 사용량 한도: ${reset.toISOString().slice(11, 16)} UTC 초기화, ${Math.round(wait / 60000)}분 기다림 ===`);
+      await sleep(wait);
+    }
+  }
+  throw new Error('사용량 한도로 여러 번 실패');
+}
+
+for (const name of names) await withLimitWait(() => runOne(name));
+
+async function runOne(name) {
   const sc = JSON.parse(await fs.readFile(path.join(ROOT, 'tests', 'scenarios', `${name}.json`), 'utf8'));
   const project = fakeProject(sc);
   const t0 = Date.now();
@@ -63,6 +83,13 @@ for (const name of names) {
   console.log(`=== ${name} : 자체 검증 ===`);
   const r = await selfReview(project, plan);
   plan = r.plan;
+  // 최종본(자동 보완 후)도 채점: 실제로 전달되는 품질
+  console.log(`=== ${name} : 최종본 채점 ===`);
+  let finalAi = [];
+  try { finalAi = (await aiReview(project, plan, r.review.lintAfter || {})).reviews; } catch (err) { console.warn('최종본 채점 실패:', err.message); }
+  const finalByKey = Object.fromEntries(finalAi.map((x) => [x.key, x]));
+  const finalAvg = finalAi.length ? (finalAi.reduce((a, x) => a + x.total, 0) / finalAi.length).toFixed(2) : '-';
+  r.review.final = finalAi;
   const sec = Math.round((Date.now() - t0) / 1000);
 
   await fs.mkdir(path.join(ROOT, 'data', 'evals'), { recursive: true });
@@ -80,15 +107,15 @@ for (const name of names) {
     '',
     '## 점수 요약 (첫 버전 기준 AI 편집장 채점)',
     '',
-    '| 결과물 | 총점 | 사실 | 첫인상 | 사람다움 | 플랫폼 | 정보 | 구체성 | 자동 보완 | 규칙(전→후) |',
-    '|---|---|---|---|---|---|---|---|---|---|',
+    '| 결과물 | 총점 | 사실 | 첫인상 | 사람다움 | 플랫폼 | 정보 | 구체성 | 자동 보완 | 규칙(전→후) | 최종본 |',
+    '|---|---|---|---|---|---|---|---|---|---|---|',
     ...PLATFORM_KEYS.map((k) => {
       const a = byKey[k];
       const s = a?.scores || {};
-      return `| ${PLATFORMS[k].label} | ${a ? a.total.toFixed(1) : '-'} | ${s.facts ?? ''} | ${s.hook ?? ''} | ${s.human ?? ''} | ${s.platform ?? ''} | ${s.value ?? ''} | ${s.specific ?? ''} | ${r.review.revised.includes(k) ? '✅' : ''} | ${r.review.lint[k]?.score ?? '-'} → ${lintAfter[k]?.score ?? '-'} |`;
+      return `| ${PLATFORMS[k].label} | ${a ? a.total.toFixed(1) : '-'} | ${s.facts ?? ''} | ${s.hook ?? ''} | ${s.human ?? ''} | ${s.platform ?? ''} | ${s.value ?? ''} | ${s.specific ?? ''} | ${r.review.revised.includes(k) ? '✅' : ''} | ${r.review.lint[k]?.score ?? '-'} → ${lintAfter[k]?.score ?? '-'} | ${finalByKey[k] ? finalByKey[k].total.toFixed(1) : '-'} |`;
     }),
     '',
-    `평균 ${avg} / 5`,
+    `평균 ${avg} / 5 (첫 버전) → **${finalAvg} / 5 (최종본)**`,
     '',
     '## 편집장 의견',
     ...PLATFORM_KEYS.map((k) => {
@@ -104,5 +131,5 @@ for (const name of names) {
   ].join('\n');
   await fs.mkdir(path.join(ROOT, 'docs', 'evals'), { recursive: true });
   await fs.writeFile(path.join(ROOT, 'docs', 'evals', `${name}.md`), md);
-  console.log(`=== ${name} 완료: 평균 ${avg}, 자동 보완 ${r.review.revised.join(', ') || '없음'}, ${sec}초 → docs/evals/${name}.md`);
+  console.log(`=== ${name} 완료: 첫 버전 ${avg} → 최종본 ${finalAvg}, 자동 보완 ${r.review.revised.join(', ') || '없음'}, ${sec}초 → docs/evals/${name}.md`);
 }

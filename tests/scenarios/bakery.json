@@ -1,0 +1,24 @@
+{
+  "note": "가상 시나리오(새 예제): 동네 빵집, 카페 컨셉",
+  "hints": { "concept": "cafe", "placeName": "연남동 빵집 ○○베이커리", "memo": "평일 오전 10시 반, 오픈 30분 뒤. 소금빵이 제일 많이 나가는 듯 계속 채워짐. 소금빵 겉 바삭 속 버터 많음, 짭짤. 크림치즈 베이글은 쫀득하고 크림치즈 듬뿍. 앉을 자리 4석뿐이라 포장해서 나옴. 아쉬운 점: 11시 넘으니 줄 생김, 카드 결제만 됨(현금 X)." },
+  "analysis": {
+    "category": "restaurant", "concept": "cafe", "place_name": "○○베이커리 연남",
+    "summary": "연남동 골목의 작은 빵집. 진열대에 소금빵, 베이글, 스콘, 식빵이 있고 매장 안 좌석은 4석. 가격표가 빵마다 붙어 있다.",
+    "key_facts": ["소금빵 3,200원", "크림치즈 베이글 4,800원", "얼그레이 스콘 3,900원", "우유식빵 6,500원", "아메리카노 4,000원", "영업 09:00~19:00, 월요일 휴무 (출입문 안내)", "카드 결제만 가능 (계산대 안내)", "매장 좌석 4석 (내부 사진)"],
+    "music_prompt": "cozy morning bakery, soft acoustic guitar and light piano, warm, no vocals, 90 bpm",
+    "shots": [
+      { "ref": "m1", "description": "작은 파란 차양과 원목 간판의 빵집 외관", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m2", "description": "출입문 안내: 영업 09:00~19:00, 월요일 휴무", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m3:f1", "description": "영상: 진열대를 천천히 훑기, 소금빵 트레이 가득", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m4", "description": "소금빵 진열과 가격표 3,200원", "items": [{"name":"소금빵","price":"3,200원","note":""}], "quality": "good", "skip_reason": "" },
+      { "ref": "m5", "description": "크림치즈 베이글과 얼그레이 스콘 가격표", "items": [{"name":"크림치즈 베이글","price":"4,800원","note":""},{"name":"얼그레이 스콘","price":"3,900원","note":""}], "quality": "good", "skip_reason": "" },
+      { "ref": "m6", "description": "우유식빵 6,500원", "items": [{"name":"우유식빵","price":"6,500원","note":""}], "quality": "ok", "skip_reason": "" },
+      { "ref": "m7:f1", "description": "영상: 직원이 갓 나온 소금빵 트레이를 진열대에 올림", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m8", "description": "소금빵 반 가른 단면, 속에 버터 구멍", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m9", "description": "크림치즈 베이글 단면, 크림치즈 두껍게", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m10", "description": "계산대 '카드 결제만 가능' 안내", "items": [], "quality": "ok", "skip_reason": "" },
+      { "ref": "m11", "description": "창가 좌석 4석", "items": [], "quality": "ok", "skip_reason": "" },
+      { "ref": "m12", "description": "포장 봉투와 빵 3개", "items": [], "quality": "good", "skip_reason": "" }
+    ]
+  }
+}

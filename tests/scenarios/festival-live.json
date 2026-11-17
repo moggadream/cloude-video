@@ -1,0 +1,22 @@
+{
+  "note": "가상 시나리오(새 예제): 아직 진행 중인 행사 (기간이 오늘 이후까지)",
+  "hints": { "concept": "festival", "placeName": "2026 ○○ 크리스마스 마켓", "memo": "일요일 저녁 6시. 점등식 끝나고 들어감. 뱅쇼 따뜻하고 계피향 진함. 7시쯤 사람 많아서 부스 앞 줄 15분. 회전목마 아이들 많음. 아쉬운 점: 의자 거의 없어서 서서 먹음, 화장실 멀음." },
+  "analysis": {
+    "category": "park_event", "concept": "festival", "place_name": "2026 ○○ 크리스마스 마켓",
+    "summary": "광장에 열린 크리스마스 마켓. 대형 트리, 오두막 부스 20여 개, 회전목마, 푸드 부스. 포스터에 기간·시간·점등 시각이 있다.",
+    "key_facts": ["기간 2026.11.13(금)~12.27(일), 운영 16:00~22:00 (포스터)", "점등 매일 17:30 (포스터)", "입장 무료 (포스터)", "회전목마 1회 3,000원 (부스 안내)", "뱅쇼 6,000원, 츄러스 4,000원, 소시지 7,000원 (푸드 메뉴판)", "○○역 5번 출구 도보 3분 (안내판)", "주차는 인근 공영주차장, 2시간 4,000원 (안내판)"],
+    "music_prompt": "festive christmas market, music box and soft bells, warm winter night, no vocals, 100 bpm",
+    "shots": [
+      { "ref": "m1", "description": "포스터: 11.13~12.27, 16:00~22:00, 점등 17:30, 입장 무료", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m2:f1", "description": "영상: 대형 트리 조명, 사람들 사진 찍음", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m3", "description": "오두막 부스 거리, 노란 전구", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m4", "description": "수공예 오너먼트 부스, 가격표 8,000~15,000원", "items": [{"name":"오너먼트","price":"8,000~15,000원","note":""}], "quality": "good", "skip_reason": "" },
+      { "ref": "m5", "description": "푸드 메뉴판", "items": [{"name":"뱅쇼","price":"6,000원","note":""},{"name":"츄러스","price":"4,000원","note":""},{"name":"소시지","price":"7,000원","note":""}], "quality": "good", "skip_reason": "" },
+      { "ref": "m6:f1", "description": "영상: 뱅쇼 국자로 따르는 장면, 김", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m7:f1", "description": "영상: 회전목마 돌아가는 조명", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m8", "description": "회전목마 요금 1회 3,000원", "items": [{"name":"회전목마 1회","price":"3,000원","note":""}], "quality": "ok", "skip_reason": "" },
+      { "ref": "m9:f1", "description": "영상: 7시쯤 사람으로 꽉 찬 부스 거리", "items": [], "quality": "ok", "skip_reason": "" },
+      { "ref": "m10", "description": "교통·주차 안내판", "items": [], "quality": "good", "skip_reason": "" }
+    ]
+  }
+}

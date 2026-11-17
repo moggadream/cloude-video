@@ -1,0 +1,22 @@
+{
+  "note": "가상 시나리오(새 예제): 분식 위주 시장",
+  "hints": { "concept": "market", "placeName": "○○시장 분식골목", "memo": "토요일 오후 2시. 떡볶이 국물 달고 매운 편, 떡 쫄깃. 순대는 내장 같이 줌. 튀김 김말이 바삭. 셋이서 떡볶이+순대+튀김 시켜서 배부름. 사장님이 어묵 국물 계속 리필해주심. 아쉬운 점: 앉는 자리 좁고 줄 10분." },
+  "analysis": {
+    "category": "mart", "concept": "market", "place_name": "○○시장 분식골목",
+    "summary": "시장 안 분식 골목. 떡볶이·순대·튀김 가게가 모여 있고 메뉴판 가격이 손글씨로 붙어 있다.",
+    "key_facts": ["떡볶이 1인분 4,000원", "순대 1인분 5,000원", "모둠튀김 5개 5,000원", "김말이 1개 1,000원", "어묵 1개 1,000원 (국물 무료)", "가게 영업 10:00~20:00 (가게 안내)", "시장 공영주차장 30분 무료 (시장 입구 안내)"],
+    "music_prompt": "playful upbeat korean street food vibe, plucky synth and light percussion, no vocals, 112 bpm",
+    "shots": [
+      { "ref": "m1", "description": "분식골목 입구 간판", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m2:f1", "description": "영상: 큰 철판에 떡볶이 끓는 장면, 빨간 국물", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m3", "description": "손글씨 메뉴판", "items": [{"name":"떡볶이 1인분","price":"4,000원","note":""},{"name":"순대 1인분","price":"5,000원","note":""},{"name":"모둠튀김 5개","price":"5,000원","note":""}], "quality": "good", "skip_reason": "" },
+      { "ref": "m4:f1", "description": "영상: 순대 써는 손, 내장 함께", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m5", "description": "튀김 진열대, 김말이·오징어·고구마", "items": [{"name":"김말이","price":"1,000원","note":""}], "quality": "good", "skip_reason": "" },
+      { "ref": "m6", "description": "떡볶이·순대·튀김 한 상, 위에서", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m7:f1", "description": "영상: 떡볶이 떡 들어 올리기", "items": [], "quality": "good", "skip_reason": "" },
+      { "ref": "m8", "description": "어묵 꼬치와 국물 솥, '국물 무료'", "items": [{"name":"어묵","price":"1,000원","note":"국물 무료"}], "quality": "good", "skip_reason": "" },
+      { "ref": "m9", "description": "좁은 좌석과 대기줄", "items": [], "quality": "ok", "skip_reason": "" },
+      { "ref": "m10", "description": "공영주차장 안내 30분 무료", "items": [], "quality": "ok", "skip_reason": "" }
+    ]
+  }
+}

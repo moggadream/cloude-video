@@ -21,7 +21,7 @@ const ReviewSchema = z.object({
 const THRESHOLD = Number(process.env.REVIEW_THRESHOLD || 4.3);
 export const reviewEnabled = () => (process.env.REVIEW || 'on') !== 'off';
 
-async function aiReview(project, plan, lint) {
+export async function aiReview(project, plan, lint) {
   const ctx = await contextText(project, plan, null);
   const outputs = PLATFORM_KEYS.map((k) => `### ${k} (${PLATFORMS[k].label})\n${JSON.stringify(toShotForm(k, plan, project), null, 1)}`).join('\n\n');
   const lintText = PLATFORM_KEYS.map((k) => `- ${k}: ${lint[k]?.issues.map((i) => `[${i.level}] ${i.msg}`).join(' / ') || '문제 없음'}`).join('\n');

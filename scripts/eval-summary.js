@@ -15,7 +15,10 @@ for (const f of files) {
   const byKey = Object.fromEntries(ai.map((x) => [x.key, x]));
   const avg = ai.length ? ai.reduce((a, x) => a + x.total, 0) / ai.length : null;
   const facts3 = ai.filter((x) => x.scores.facts <= 3).length;
-  runs.push({ name, at, avg, facts3, revised: d.review?.revised || [], byKey });
+  const fin = d.review?.final || [];
+  const finalAvg = fin.length ? fin.reduce((a, x) => a + x.total, 0) / fin.length : null;
+  const finalByKey = Object.fromEntries(fin.map((x) => [x.key, x]));
+  runs.push({ name, at, avg, finalAvg, finalByKey, facts3, revised: d.review?.revised || [], byKey });
 }
 
 const latest = {};
@@ -31,15 +34,15 @@ const lines = [
   '',
   '## 최신 결과 (첫 버전 기준 편집장 점수, 5점 만점)',
   '',
-  `| 컨셉 | 평균 | 사실 3점↓ | ${PLATFORM_KEYS.map((k) => PLATFORMS[k].label).join(' | ')} | 자동 보완 |`,
-  `|---|---|---|${PLATFORM_KEYS.map(() => '---').join('|')}|---|`,
-  ...Object.values(latest).map((r) => `| ${r.name} | **${fmt(r.avg)}** | ${r.facts3} | ${PLATFORM_KEYS.map((k) => (r.byKey[k] ? r.byKey[k].total.toFixed(1) : '-')).join(' | ')} | ${r.revised.length}개 |`),
+  `| 컨셉 | 첫 버전 | 최종본 | 사실 3점↓ | ${PLATFORM_KEYS.map((k) => PLATFORMS[k].label).join(' | ')} | 자동 보완 |`,
+  `|---|---|---|---|${PLATFORM_KEYS.map(() => '---').join('|')}|---|`,
+  ...Object.values(latest).map((r) => `| ${r.name} | ${fmt(r.avg)} | **${fmt(r.finalAvg)}** | ${r.facts3} | ${PLATFORM_KEYS.map((k) => (r.byKey[k] ? r.byKey[k].total.toFixed(1) : '-')).join(' | ')} | ${r.revised.length}개 |`),
   '',
   '## 회차별 평균',
   '',
-  '| 컨셉 | 회차별 평균 (오래된 순) |',
+  '| 컨셉 | 회차별 첫 버전 평균 (오래된 순, 괄호는 최종본) |',
   '|---|---|',
-  ...Object.entries(history).map(([n, rs]) => `| ${n} | ${rs.map((r) => fmt(r.avg)).join(' → ')} |`),
+  ...Object.entries(history).map(([n, rs]) => `| ${n} | ${rs.map((r) => `${fmt(r.avg)}${r.finalAvg != null ? ` (${fmt(r.finalAvg)})` : ''}`).join(' → ')} |`),
   '',
 ];
 const all = Object.values(latest).filter((r) => r.avg != null);
