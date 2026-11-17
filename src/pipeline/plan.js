@@ -264,6 +264,17 @@ export async function writeAll(project, plan, onDone = () => {}) {
   ].join('\n') : '');
   await run(STAGE_B, note([describe('shorts', '유튜브 쇼츠')]));
   await run(STAGE_C, note([describe('shorts', '유튜브 쇼츠'), describe('tiktok', '틱톡')]));
+  // 블로그 사실 확인: 근거 없는 문장만 찾아서 지우거나 바꾼다
+  if (process.env.FACTCHECK !== 'off') {
+    try {
+      const { factCheckBlog } = await import('./factcheck.js');
+      const fc = await factCheckBlog(project, plan);
+      plan.factcheck = { blog: { applied: fc.applied, edits: fc.edits } };
+      console.log(`[factcheck] 블로그 ${fc.applied}문장 고침`);
+    } catch (err) {
+      console.warn('[factcheck] 블로그 사실 확인 실패:', err.message);
+    }
+  }
 }
 
 /** 가격 표시가 여러 개면 첫 번째만 (화면에 길게 나오지 않게) */
