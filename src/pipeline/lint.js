@@ -65,7 +65,11 @@ export function lintOutput(key, out, plan, project) {
 
   // 2) 근거 없는 가격 (분석 결과·메모에 없는 금액)
   const known = knownNumbers(plan, project);
-  const unknown = [...new Set(prices(text))].filter((n) => !known.has(n));
+  // 자료 숫자 두 개의 합·차·배수(2~4배)는 계산한 값으로 본다 (예: 6,800 + 7,500 = 14,300)
+  const base = [...known].filter((n) => n >= 100);
+  const derived = (n) => base.some((a) => [2, 3, 4].some((k) => a * k === n))
+    || base.some((a) => base.some((b) => a + b === n || Math.abs(a - b) === n));
+  const unknown = [...new Set(prices(text))].filter((n) => !known.has(n) && !derived(n));
   // 합계·차액처럼 계산한 숫자일 수 있어 경고로만
   if (unknown.length) add(unknown.length > 2 ? 'error' : 'warn', `자료에 없는 금액: ${unknown.slice(0, 6).map((n) => `${n.toLocaleString()}원`).join(', ')} (계산한 값이 아니라면 확인 필요)`);
 
@@ -145,7 +149,7 @@ export function lintOutput(key, out, plan, project) {
     if (!/(아쉬|단점|불편|웨이팅|대기|주의|다만|흠)/.test(body)) add('warn', '아쉬운 점이 없음 (신뢰도)');
     if (!/(📍|위치|주소|⏰|영업|운영|주차|🚗)/.test(body)) add('warn', '방문 정보(위치·시간·주차)가 없음');
     if (/위 사진은|아래 사진은|사진에서 보시는/.test(body)) add('warn', '사진 설명체("위 사진은")');
-    if (out.title.length > 45) add('warn', `제목 ${out.title.length}자 (30자 안팎 권장)`);
+    if (out.title.length > 35) add('warn', `제목 ${out.title.length}자 (32자 이내 권장)`);
   }
 
   const score = Math.max(0, 100 - issues.reduce((a, i) => a + (i.level === 'error' ? 25 : 8), 0));

@@ -16,11 +16,20 @@ const ai = await aiStatus();
 if (ai.backend === 'off') { console.error('AI가 연결돼 있어야 해요'); process.exit(1); }
 
 function fakeProject(sc) {
+  // 시나리오에 나온 장면 번호만큼 영상 프레임을 만든다 (m1:f11 이면 프레임 12개)
   const media = new Map();
+  const maxF = {};
+  for (const s of sc.analysis.shots) {
+    const [id, f] = s.ref.split(':f');
+    if (f !== undefined) maxF[id] = Math.max(maxF[id] ?? 0, Number(f));
+  }
   for (const s of sc.analysis.shots) {
     const [id, f] = s.ref.split(':f');
     if (f === undefined) media.set(id, { id, kind: 'image', file: `${id}.jpg`, normalized: `${id}.jpg`, frames: [{ file: `${id}.jpg`, time: 0 }] });
-    else media.set(id, { id, kind: 'video', file: `${id}.mp4`, duration: 9, frames: [0, 3, 6].map((t, i) => ({ file: `${id}_f${i}.jpg`, time: t })) });
+    else {
+      const n = Math.max(3, maxF[id] + 1);
+      media.set(id, { id, kind: 'video', file: `${id}.mp4`, duration: n * 4, frames: Array.from({ length: n }, (_, i) => ({ file: `${id}_f${i}.jpg`, time: i * 4 + 2 })) });
+    }
   }
   return { id: 'eval', hints: sc.hints, media: [...media.values()] };
 }

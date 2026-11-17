@@ -79,7 +79,23 @@ export async function selfReview(project, plan, onStep = () => {}) {
       console.warn(`[review] ${k} 보완 실패:`, err.message);
     }
   }
-  const after = lintPlan(current, project, PLATFORM_KEYS);
+  // 마무리 손질: 블로그·쓰레드는 규칙 검사(말끝·길이·제목)가 남아 있으면 그것만 한 번 더 고친다
+  let after = lintPlan(current, project, PLATFORM_KEYS);
+  for (const k of ['blog', 'threads']) {
+    const left = (after[k]?.issues || []).filter((i) => /말끝|본문|제목|자\b|자 \(|질문/.test(i.msg));
+    if (!left.length) continue;
+    onStep(`자체 검증: ${PLATFORMS[k].label} 마무리 손질`, 0.95);
+    try {
+      current = await reviseOutput(project, k, [
+        ...left.map((i) => `- ${i.msg}`),
+        '- 내용(사실)은 바꾸지 말고 위 형식 문제만 고칠 것. 분량을 늘릴 때는 장면 목록에 보이는 사실만 쓸 것.',
+      ].join('\n'), { plan: current, auto: true });
+      if (!revised.includes(k)) revised.push(k);
+    } catch (err) {
+      console.warn(`[review] ${k} 마무리 손질 실패:`, err.message);
+    }
+  }
+  after = lintPlan(current, project, PLATFORM_KEYS);
   return {
     plan: current,
     review: {
