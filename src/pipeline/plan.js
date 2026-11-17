@@ -145,8 +145,10 @@ async function blogCategoryGuide(concept) {
   try {
     const fs = await import('node:fs/promises');
     const { ROOT } = await import('../config.js');
-    const file = path.join(ROOT, '.claude', 'skills', 'naver-blog', 'categories', `${CONCEPT_BY_ID[concept] ? concept : 'other'}.md`);
-    return (await fs.readFile(file, 'utf8')).trim();
+    const dir = path.join(ROOT, '.claude', 'skills', 'naver-blog');
+    const cat = (await fs.readFile(path.join(dir, 'categories', `${CONCEPT_BY_ID[concept] ? concept : 'other'}.md`), 'utf8')).trim();
+    const ex = await fs.readFile(path.join(dir, 'examples.md'), 'utf8').catch(() => '');
+    return [cat, ex.trim()].filter(Boolean).join('\n\n');
   } catch { return ''; }
 }
 
