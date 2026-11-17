@@ -242,22 +242,35 @@ export async function makePlan(project, dir, onStep = () => {}) {
  * ① 쇼츠·롱폼·블로그·쓰레드  ② 릴스·틱톡·캐러셀은 쇼츠를 보고 "겹치지 않게"
  */
 export const STAGE_A = ['shorts', 'longform', 'blog', 'threads'];
-export const STAGE_B = ['reels', 'tiktok', 'carousel'];
+export const STAGE_B = ['tiktok', 'carousel'];
+export const STAGE_C = ['reels']; // 쇼츠·틱톡을 다 보고 마지막에 (훅이 겹치지 않게)
 export async function writeAll(project, plan, onDone = () => {}) {
   const run = (keys, siblings) => pool(keys, 3, async (k) => {
     plan[k] = await writePlatform(k, project, plan, siblings);
     onDone(k);
   });
   await run(STAGE_A, '');
-  const s = plan.shorts;
-  const siblings = s ? [
-    '## 이미 쓴 유튜브 쇼츠 (이것과 겹치지 않게)',
-    `- 훅: ${String(s.hook).replace(/\n/g, ' / ')}`,
-    `- 장면 순서: ${(s.scenes || []).map((x) => x.shot).join(' → ')}`,
-    `- 첫 나레이션: ${s.scenes?.[0]?.narration || ''}`,
-    '훅 문구, 첫 장면, 장면 순서, 문장을 쇼츠와 다르게 하세요. 같은 사실을 전하더라도 표현을 바꿉니다.',
-  ].join('\n') : '';
-  await run(STAGE_B, siblings);
+  const describe = (k, label) => {
+    const s = plan[k];
+    if (!s?.scenes) return '';
+    return [`### ${label}`, `- 훅: ${String(s.hook).replace(/\n/g, ' / ')}`,
+      `- 장면 순서: ${s.scenes.map((x) => x.shot).join(' → ')}`, `- 첫 나레이션: ${s.scenes[0]?.narration || ''}`].join('\n');
+  };
+  const note = (blocks) => (blocks.filter(Boolean).length ? [
+    '## 이미 쓴 다른 숏폼 (이것들과 겹치지 않게)', ...blocks.filter(Boolean),
+    '훅 문구, 첫 장면, 장면 순서, 문장을 위 숏폼들과 다르게 하세요. 같은 사실을 전하더라도 표현을 바꿉니다.',
+  ].join('\n') : '');
+  await run(STAGE_B, note([describe('shorts', '유튜브 쇼츠')]));
+  await run(STAGE_C, note([describe('shorts', '유튜브 쇼츠'), describe('tiktok', '틱톡')]));
+}
+
+/** 가격 표시가 여러 개면 첫 번째만 (화면에 길게 나오지 않게) */
+function firstPrice(tag) {
+  const t = String(tag || '').trim();
+  if (t.length <= 16) return t;
+  // 숫자 사이 쉼표(3,000)는 자르지 않고, 구분자(· / | 또는 쉼표+공백)에서만 자른다
+  const first = t.split(/\s*[·/|]\s*|,\s+|\s+-\s+/)[0].trim();
+  return first.length <= 18 ? first : t.slice(0, 16);
 }
 
 // ---------- ③ 수정 요청 ----------
@@ -428,7 +441,7 @@ export function finalizePlan(plan, project, only = null) {
           clip_start: s.media.kind === 'video' && s.media.frames.length > 3 ? Math.max(0, Math.round((s.time - 0.3) * 10) / 10) : 0,
           narration: String(sc.narration || '').trim(),
           caption: String(sc.caption || '').trim(),
-          price_tag: String(sc.price_tag || '').trim(),
+          price_tag: firstPrice(sc.price_tag),
           chapter: String(sc.chapter || '').trim(),
         };
       }).filter(Boolean);
