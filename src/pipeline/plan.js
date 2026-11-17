@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { generate, aiBackend } from '../ai/index.js';
 import { loadSkill, loadStyleSamples, recentFeedback } from '../ai/skills.js';
 import { smallJpegBase64 } from './media.js';
+import { CONCEPTS, CONCEPT_BY_ID } from '../guides/concepts.js';
 
 export const CATEGORIES = {
   mart: '마트·시장·상점',
@@ -27,8 +28,10 @@ export const VIDEO_KEYS = PLATFORM_KEYS.filter((k) => PLATFORMS[k].type === 'vid
 
 // ---------- 답 형식 ----------
 
+const CONCEPT_IDS = [...CONCEPTS.map((c) => c.id), 'other'];
 const AnalysisSchema = z.object({
   category: z.enum(['mart', 'restaurant', 'park_event', 'other']),
+  concept: z.enum(CONCEPT_IDS).describe(CONCEPTS.map((c) => `${c.id}=${c.label}`).join(', ') + ', other=기타'),
   place_name: z.string(),
   summary: z.string(),
   key_facts: z.array(z.string()),
@@ -74,6 +77,7 @@ const OUT_SCHEMA = { video: VideoOut, carousel: CarouselOut, text: ThreadsOut, b
 const hintText = (project) => {
   const h = project.hints || {};
   return [
+    `- 컨셉: ${h.concept && CONCEPT_BY_ID[h.concept] ? `${CONCEPT_BY_ID[h.concept].label} (${h.concept})` : '자동 판단'}`,
     `- 장소 종류: ${h.category && h.category !== 'auto' ? CATEGORIES[h.category] : '자동 판단'}`,
     `- 장소 이름: ${h.placeName || '(없음)'}`,
     `- 촬영자 메모: ${h.memo || '(없음)'}`,
@@ -106,6 +110,7 @@ async function contextText(project, plan, key) {
   const parts = [
     '## 촬영자 정보', hintText(project), '',
     '## 자료 분석 결과',
+    `- 컨셉: ${CONCEPT_BY_ID[plan.concept]?.label || '기타'}`,
     `- 장소 종류: ${CATEGORIES[plan.category]}`,
     `- 장소 이름: ${plan.place_name || '(모름)'}`,
     `- 요약: ${plan.summary}`,
@@ -119,8 +124,29 @@ async function contextText(project, plan, key) {
   return parts.join('\n');
 }
 
-async function platformSystem(key, extra = '') {
+/** 컨셉 스킬에서 "콘텐츠 전략" 부분만 */
+async function conceptStrategy(concept) {
+  if (!CONCEPT_BY_ID[concept]) return '';
+  const text = await loadSkill(`concept-${concept}`);
+  const i = text.indexOf('## 2. 콘텐츠 전략');
+  const j = text.indexOf('## 공통 촬영 팁');
+  return i >= 0 ? text.slice(i, j > i ? j : undefined).replace('## 2. 콘텐츠 전략', '').trim() : '';
+}
+
+/** 블로그 카테고리별 작성법 (.claude/skills/naver-blog/categories/<concept>.md) */
+async function blogCategoryGuide(concept) {
+  try {
+    const fs = await import('node:fs/promises');
+    const { ROOT } = await import('../config.js');
+    const file = path.join(ROOT, '.claude', 'skills', 'naver-blog', 'categories', `${CONCEPT_BY_ID[concept] ? concept : 'other'}.md`);
+    return (await fs.readFile(file, 'utf8')).trim();
+  } catch { return ''; }
+}
+
+async function platformSystem(key, extra = '', concept = '') {
   const p = PLATFORMS[key];
+  const strategy = await conceptStrategy(concept);
+  const blogCat = key === 'blog' ? await blogCategoryGuide(concept) : '';
   return [
     '당신은 한국에서 동네 가게·맛집·행사를 소개하는 1인 크리에이터의 대본 작가입니다.',
     '촬영자가 직접 다녀와 찍은 자료로, 촬영자 본인이 쓴 것처럼 1인칭으로 씁니다.',
@@ -128,6 +154,8 @@ async function platformSystem(key, extra = '') {
     extra,
     '', '# 공통 규칙', await loadSkill('humanize-korean'),
     '', `# ${p.label} 스킬`, await loadSkill(p.skill),
+    strategy ? `\n# 이 컨셉(${CONCEPT_BY_ID[concept].label})의 콘텐츠 전략\n${strategy}` : '',
+    blogCat ? `\n# 이 컨셉의 블로그 작성법\n${blogCat}` : '',
   ].join('\n');
 }
 
@@ -161,7 +189,7 @@ async function analyze(project, dir) {
 async function writePlatform(key, project, plan) {
   const ctx = await contextText(project, plan, key);
   return generate({
-    system: await platformSystem(key),
+    system: await platformSystem(key, '', plan.concept),
     content: [{ type: 'text', text: `${ctx}\n\n위 자료로 ${PLATFORMS[key].label} 결과물을 써주세요.` }],
     schema: OUT_SCHEMA[PLATFORMS[key].type],
     label: PLATFORMS[key].label,
@@ -237,7 +265,7 @@ export async function reviseOutput(project, key, instruction) {
   const ctx = await contextText(project, plan, key);
   const current = JSON.stringify(toShotForm(key, plan, project), null, 1);
   const out = await generate({
-    system: await platformSystem(key, '지금은 이미 쓴 결과물을 촬영자의 수정 요청대로 고치는 중입니다. 요청과 관계없는 부분은 최대한 그대로 둡니다.'),
+    system: await platformSystem(key, '지금은 이미 쓴 결과물을 촬영자의 수정 요청대로 고치는 중입니다. 요청과 관계없는 부분은 최대한 그대로 둡니다.', plan.concept),
     content: [{
       type: 'text',
       text: `${ctx}\n\n## 지금 결과물 (${PLATFORMS[key].label})\n${current}\n\n## 촬영자의 수정 요청\n${instruction}\n\n요청을 반영해 같은 형식으로 다시 써주세요.`,
@@ -260,7 +288,7 @@ export function spread(arr, n) {
 
 export function mockPlan(project) {
   const hint = project.hints || {};
-  const category = hint.category && hint.category !== 'auto' ? hint.category : 'other';
+  const category = hint.category && hint.category !== 'auto' ? hint.category : (CONCEPT_BY_ID[hint.concept]?.category || 'other');
   const name = hint.placeName || '오늘 다녀온 곳';
   const memo = hint.memo || '';
   // 영상은 짧으면 가운데 장면 하나, 길면 뽑은 장면 모두
@@ -292,6 +320,7 @@ export function mockPlan(project) {
   return {
     _source: 'mock',
     category,
+    concept: CONCEPT_BY_ID[hint.concept] ? hint.concept : 'other',
     place_name: hint.placeName || '',
     summary: `[예시] ${name}에서 찍은 자료 ${project.media.length}개예요. ${memo}`.trim(),
     key_facts: memo ? [memo] : [],

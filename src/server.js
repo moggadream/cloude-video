@@ -14,6 +14,8 @@ import { driveReady, listUploadFolders, createProjectFromFolder, ensureDriveFold
 import { startTelegram } from './telegram/bot.js';
 import { kindOf } from './pipeline/media.js';
 import { CATEGORIES, PLATFORMS } from './pipeline/plan.js';
+import { CONCEPTS, CONCEPT_BY_ID, COMMON_TIPS, totals, useLabel } from './guides/concepts.js';
+import { STORIES } from './guides/stories.js';
 import { addSubscription, getVapid, notify } from './notify.js';
 import { publishOutput, platformStatus } from './publish/index.js';
 
@@ -78,9 +80,12 @@ const upload = multer({
 app.post('/api/projects', upload.array('files', 40), async (req, res) => {
   const files = req.files || [];
   if (files.length === 0) return res.status(400).json({ error: '사진이나 영상을 1개 이상 올려 주세요' });
-  const category = Object.hasOwn(CATEGORIES, req.body.category) ? req.body.category : 'auto';
+  const concept = CONCEPT_BY_ID[req.body.concept] ? req.body.concept : 'auto';
+  const category = Object.hasOwn(CATEGORIES, req.body.category) ? req.body.category
+    : (CONCEPT_BY_ID[concept]?.category || 'auto');
   const project = await createProject({
     hints: {
+      concept,
       category,
       placeName: String(req.body.placeName || '').slice(0, 100),
       memo: String(req.body.memo || '').slice(0, 1000),
@@ -202,6 +207,19 @@ app.post('/api/projects/:id/outputs/:key/revise', loadProject, checkKey, async (
   await updateProject(req.project.id, (p) => { p.outputs[req.params.key].status = 'queued'; });
   enqueue(`revise ${req.project.id} ${req.params.key}`, () => reviseAndRender(req.project.id, req.params.key, instruction)).catch(() => {});
   res.json({ ok: true });
+});
+
+// ---------- 촬영 가이드 ----------
+app.get('/api/guides', (req, res) => {
+  res.json({
+    tips: COMMON_TIPS,
+    concepts: CONCEPTS.map((c) => ({
+      ...c,
+      totals: totals(c),
+      story: STORIES[c.id],
+      shots: c.shots.map((s) => ({ ...s, useLabels: s.uses.map(useLabel) })),
+    })),
+  });
 });
 
 // ---------- 드라이브 폴더 ----------

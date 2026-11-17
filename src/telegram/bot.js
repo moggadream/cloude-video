@@ -15,6 +15,7 @@ import { PLATFORMS, PLATFORM_KEYS, CATEGORIES } from '../pipeline/plan.js';
 import { driveReady, listUploadFolders, createProjectFromFolder } from '../drive.js';
 import { aiStatus } from '../ai/index.js';
 import { kindOf } from '../pipeline/media.js';
+import { CONCEPTS, CONCEPT_BY_ID, guideText, totals } from '../guides/concepts.js';
 
 const MAX_UPLOAD = 49 * 1024 * 1024; // 봇이 보낼 수 있는 파일 크기 (50MB 제한)
 const stateFile = () => path.join(config.dataDir, 'telegram-state.json');
@@ -77,6 +78,7 @@ export async function startTelegram() {
     console.log(`[telegram] @${me.username} 연결됨${chatId() ? '' : ' — TELEGRAM_CHAT_ID가 비어 있어요. 봇에게 /start 를 보내 보세요'}`);
     await call('setMyCommands', {
       commands: [
+        { command: 'guide', description: '무엇을 몇 컷 찍을지 촬영 가이드' },
         { command: 'make', description: '자료로 콘텐츠 만들기' },
         { command: 'list', description: '최근 작업 보기' },
         { command: 'status', description: 'AI·드라이브 연결 상태' },
@@ -140,10 +142,12 @@ const HELP = () => `🎬 사용법
 ${driveReady()
     ? `구글 드라이브 "${config.drive.uploadName}" 폴더 안에 작업별 폴더를 만들고 사진·영상을 넣어 주세요.
  • 폴더 이름 = 장소 이름 (예: "코스트코 양재점")
- • 앞에 [마트] [맛집] [행사]를 붙이면 장소 종류를 알려줄 수 있어요
+ • 앞에 컨셉 태그를 붙여 주세요: ${CONCEPTS.map((c) => `[${c.tag}]`).join(' ')}
  • 폴더 안 메모.txt 내용은 메모로 써요 (영업시간, 행사 기간 등)`
     : '⚠️ 아직 드라이브 폴더가 연결되지 않았어요 (.env 의 DRIVE_DIR)'}
 작은 사진(20MB 이하)은 이 채팅으로 바로 보내도 돼요.
+
+0) 찍기 전에: /guide 로 컨셉(맛집·카페·마트·시장·공원·유원지·축제·팝업)을 고르면 무엇을 몇 컷 찍을지 알려드려요.
 
 2) 만들기: /make  (또는 "만들어줘", "코스트코 만들어줘")
 
@@ -162,6 +166,7 @@ async function onMessage(msg) {
 
   if (/^\/(start|help)\b/.test(text)) return send(HELP());
   if (/^\/status\b/.test(text)) return sendStatus();
+  if (/^\/guide\b/.test(text) || /^(촬영\s*)?가이드/.test(text)) return sendGuideMenu();
   if (/^\/list\b/.test(text)) return sendList();
 
   // 결과 메시지에 답장 → 그 결과물 수정
@@ -272,6 +277,11 @@ async function onCallback(q) {
   const answer = (text) => call('answerCallbackQuery', { callback_query_id: q.id, ...(text ? { text } : {}) }).catch(() => {});
 
   if (data === 'mkin') { await answer(); return startInbox(); }
+  if (data.startsWith('gd:')) {
+    const c = CONCEPT_BY_ID[data.slice(3)];
+    await answer();
+    return c ? send(guideText(c)) : null;
+  }
   if (data.startsWith('mk:')) {
     const name = st.folderChoices[Number(data.slice(3))];
     await answer();
@@ -402,6 +412,17 @@ export async function sendReport(pid) {
       await send(`⚠️ ${PLATFORMS[key].label} 보내기 실패: ${err.message}`).catch(() => {});
     }
   }
+}
+
+async function sendGuideMenu() {
+  const rows = [];
+  for (let i = 0; i < CONCEPTS.length; i += 2) {
+    rows.push(CONCEPTS.slice(i, i + 2).map((c) => {
+      const t = totals(c);
+      return { text: `${c.emoji} ${c.label} (📷${t.photos} 🎥${t.videos})`, callback_data: `gd:${c.id}` };
+    }));
+  }
+  return send('어떤 걸 만들 건가요? 누르면 무엇을 몇 컷 찍을지 알려드려요.\n(📷 사진 장수, 🎥 영상 개수)', kb(rows));
 }
 
 async function sendStatus() {

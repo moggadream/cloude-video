@@ -8,6 +8,7 @@ import { config } from './config.js';
 import { createProject, updateProject, projectDir, getProject } from './store.js';
 import { kindOf } from './pipeline/media.js';
 import { CATEGORIES } from './pipeline/plan.js';
+import { conceptFromTag, CONCEPT_BY_ID } from './guides/concepts.js';
 import { allTextsDoc } from './pipeline/texts.js';
 
 export const driveReady = () => Boolean(config.drive.dir) && fsSync.existsSync(config.drive.dir);
@@ -79,9 +80,16 @@ export async function listUploadFolders() {
 }
 
 /** 폴더 이름에서 장소 종류 힌트: "[마트] 코스트코" 처럼 앞에 붙여 두면 사용 */
+function conceptFromName(name) {
+  const m = name.match(/^\s*\[(.+?)\]/);
+  return m ? conceptFromTag(m[1]) : null;
+}
+
 function categoryFromName(name) {
   const m = name.match(/^\s*\[(.+?)\]/);
   if (!m) return 'auto';
+  const concept = conceptFromTag(m[1]);
+  if (concept) return CONCEPT_BY_ID[concept].category;
   const t = m[1];
   if (/마트|시장|상점|가게/.test(t)) return 'mart';
   if (/음식|식당|맛집|카페/.test(t)) return 'restaurant';
@@ -102,7 +110,7 @@ export async function createProjectFromFolder(name) {
   const placeName = name.replace(/^\s*\[.+?\]\s*/, '').replace(/^\d{4}[-.]?\d{2}[-.]?\d{2}[\s_-]*/, '').trim();
   const project = await createProject({
     source: { type: 'drive', folder: name },
-    hints: { category: categoryFromName(name), placeName, memo },
+    hints: { category: categoryFromName(name), concept: conceptFromName(name) || 'auto', placeName, memo },
   });
   const pdir = projectDir(project.id);
   const media = [];

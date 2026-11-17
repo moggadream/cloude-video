@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>촬영 가이드</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg">
+  <meta name="theme-color" content="#ff5a1f">
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    .concepts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+    .concept { text-align: left; border-radius: 14px; padding: 14px; display: block; min-height: 0; background: var(--card); }
+    .concept .em { font-size: 28px; display: block; }
+    .concept b { display: block; margin: 4px 0 2px; }
+    .concept.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+    .shot { display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; align-items: start; padding: 10px 0; border-top: 1px solid var(--line); }
+    .shot input { width: 22px; height: 22px; margin-top: 2px; accent-color: var(--accent); }
+    .shot.done .name { text-decoration: line-through; color: var(--muted); }
+    .shot .how { font-size: 13px; color: var(--muted); margin-top: 2px; }
+    .shot .uses { font-size: 12px; margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap; }
+    .shot .uses span { background: var(--soft); border: 1px solid var(--line); border-radius: 99px; padding: 0 7px; }
+    .cnt { font-weight: 800; white-space: nowrap; font-size: 14px; }
+    .star { color: var(--accent); }
+    .stats { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+    .stat { background: var(--soft); border-radius: 12px; padding: 8px 12px; font-size: 14px; }
+    .stat b { font-size: 18px; display: block; }
+    .filter { display: flex; gap: 6px; margin: 8px 0; flex-wrap: wrap; }
+    .filter button.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+  </style>
+</head>
+<body>
+<header class="top"><div class="in">
+  <a class="brand" href="/">← 홈</a><span class="sp"></span><b>📋 촬영 가이드</b>
+</div></header>
+<main>
+  <section class="card">
+    <h1 style="margin-top:0">무엇을 만들 건가요?</h1>
+    <p class="muted" style="margin-top:0">컨셉을 고르면 무엇을 몇 컷 찍어야 하는지 알려드려요. 찍으면서 체크해 보세요.</p>
+    <div class="concepts" id="concepts"></div>
+  </section>
+  <section class="card hidden" id="detail"></section>
+  <section class="card">
+    <h2>공통 팁</h2>
+    <ul id="tips" class="muted"></ul>
+  </section>
+</main>
+<script type="module">
+import { api, $, h, toast, copyText, showLogin } from '/common.js';
+
+let data;
+let current = new URLSearchParams(location.search).get('c');
+let onlyMust = false;
+
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k) || '{}'); } catch { return {}; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* 저장 안 돼도 화면은 동작 */ } },
+};
+
+function renderCards() {
+  $('#concepts').replaceChildren(...data.concepts.map((c) => h('button', {
+    class: `concept ${c.id === current ? 'on' : ''}`,
+    onclick: () => { current = c.id; history.replaceState(null, '', `?c=${c.id}`); renderCards(); renderDetail(); $('#detail').scrollIntoView({ behavior: 'smooth' }); },
+  }, h('span', { class: 'em' }, c.emoji), h('b', {}, c.label),
+  h('span', { class: 'muted', style: 'font-size:13px' }, `📷 ${c.totals.photos}장 · 🎥 ${c.totals.videos}개`))));
+}
+
+function renderDetail() {
+  const c = data.concepts.find((x) => x.id === current);
+  const box = $('#detail');
+  if (!c) return box.classList.add('hidden');
+  box.classList.remove('hidden');
+  const key = `guide:${c.id}`;
+  const checked = store.get(key);
+  const shots = c.shots.filter((s) => !onlyMust || s.must);
+  const doneCount = () => c.shots.filter((s) => s.must && checked[s.id]).length;
+  const mustTotal = c.shots.filter((s) => s.must).length;
+  const progress = h('p', { class: 'muted', style: 'margin:4px 0' });
+  const bar = h('i');
+  const upd = () => {
+    progress.textContent = `꼭 필요한 컷 ${doneCount()} / ${mustTotal} 완료`;
+    bar.style.width = `${Math.round((doneCount() / mustTotal) * 100)}%`;
+  };
+  const folder = `[${c.tag}] `;
+  box.replaceChildren(
+    h('h2', {}, `${c.emoji} ${c.label}`),
+    h('p', { style: 'margin-top:0' }, c.summary),
+    h('div', { class: 'stats' },
+      h('div', { class: 'stat' }, h('b', {}, `${c.totals.photos}장`), '사진 전체'),
+      h('div', { class: 'stat' }, h('b', {}, `${c.totals.videos}개`), `영상 (약 ${c.totals.videoSec}초)`),
+      h('div', { class: 'stat' }, h('b', {}, `${c.totals.mustPhotos} + ${c.totals.mustVideos}`), '⭐ 꼭 필요 (사진+영상)'),
+      h('div', { class: 'stat' }, h('b', {}, '⏱'), c.time)),
+    h('div', { class: 'bar' }, bar), progress,
+    h('div', { class: 'filter' },
+      h('button', { class: `small ${onlyMust ? '' : 'on'}`, onclick: () => { onlyMust = false; renderDetail(); } }, '전체 보기'),
+      h('button', { class: `small ${onlyMust ? 'on' : ''}`, onclick: () => { onlyMust = true; renderDetail(); } }, '⭐ 꼭 필요한 것만'),
+      h('button', { class: 'small ghost', onclick: () => { store.set(key, {}); renderDetail(); toast('체크를 지웠어요'); } }, '체크 지우기')),
+    ...shots.map((s) => {
+      const row = h('label', { class: `shot ${checked[s.id] ? 'done' : ''}` },
+        h('input', { type: 'checkbox', checked: Boolean(checked[s.id]), onchange: (e) => {
+          checked[s.id] = e.target.checked; store.set(key, checked);
+          row.classList.toggle('done', e.target.checked); upd();
+        } }),
+        h('div', {},
+          h('div', { class: 'name' }, s.must ? h('span', { class: 'star' }, '⭐ ') : '', h('b', {}, s.name)),
+          h('div', { class: 'how' }, s.how),
+          h('div', { class: 'uses' }, ...s.useLabels.map((u) => h('span', {}, u)))),
+        h('div', { class: 'cnt' }, s.type === 'photo' ? `📷 ${s.count}장` : `🎥 ${s.count}개×${s.sec}초`));
+      return row;
+    }),
+    h('h3', { style: 'margin-top:18px' }, '📝 메모.txt 에 적을 것'),
+    h('ul', {}, ...c.memo.map((m) => h('li', {}, m))),
+    h('h3', {}, '🚫 피할 것'),
+    h('ul', {}, ...c.avoid.map((m) => h('li', {}, m))),
+    h('details', {}, h('summary', {}, '🎬 이 컨셉 영상은 이렇게 만들어져요'),
+      h('p', { class: 'muted' }, c.story.angle),
+      h('b', {}, '첫 장면(훅) 예'), h('ul', {}, ...c.story.hooks.map((x) => h('li', {}, x))),
+      h('b', {}, '꼭 들어갈 정보'), h('ul', {}, ...c.story.mustInfo.map((x) => h('li', {}, x))),
+      h('b', {}, '쇼츠 흐름'), h('ol', {}, ...c.story.shortFlow.map((x) => h('li', {}, x)))),
+    h('div', { class: 'notice', style: 'margin-top:14px' },
+      h('b', {}, '📁 드라이브 폴더 이름: '), h('code', {}, `${folder}장소 이름`),
+      h('div', { class: 'actions' },
+        h('button', { class: 'small', onclick: () => copyText(folder) }, '태그 복사'),
+        h('a', { class: 'btn small primary', href: `/?concept=${c.id}` }, '이 컨셉으로 바로 올리기'))));
+  upd();
+}
+
+(async () => {
+  const st = await api('/api/status');
+  if (!st.authed) return showLogin();
+  data = await api('/api/guides');
+  $('#tips').replaceChildren(...data.tips.map((t) => h('li', {}, t)));
+  renderCards();
+  renderDetail();
+})().catch((e) => toast(e.message));
+</script>
+</body>
+</html>
