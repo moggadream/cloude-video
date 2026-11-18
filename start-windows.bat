@@ -14,12 +14,10 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [2.5/3] 무료 나레이션 음성 확인 중...
-where python >nul 2>nul
+echo [2.5/3] 나레이션 목소리 확인 중...
+findstr /b /c:"PYTHON=" .env >nul 2>nul
 if errorlevel 1 (
-  echo     [안내] Python이 없어서 나레이션 없이 자막만 들어가요. https://www.python.org 에서 설치하면 목소리가 나와요.
-) else (
-  python -c "import edge_tts" >nul 2>nul || python -m pip install -q -r scripts\py\requirements.txt
+  echo     [안내] 목소리가 아직 설치되지 않았어요. setup-voice.bat 을 한 번 실행하면 D:\ProgramFiles 에 설치돼요. (지금은 자막만)
 )
 
 echo [3/3] 앱을 켭니다. 이 창을 닫으면 앱도 꺼져요.
