@@ -22,8 +22,27 @@ let cliCache; // { cmd, pre, version } | null
 let cliCheckedAt = 0;
 
 /** claude 실행 방법을 찾는다. Windows의 npm 설치(.cmd)도 직접 node로 실행해 따옴표 문제를 피한다 */
+/** npm 설치(.cmd) 옆의 실제 프로그램을 찾는다: 새 버전은 bin/claude.exe, 옛 버전은 cli.js */
+function fromShim(shim) {
+  const pkg = path.join(path.dirname(shim), 'node_modules', '@anthropic-ai', 'claude-code');
+  const exe = path.join(pkg, 'bin', 'claude.exe');
+  if (fsSync.existsSync(exe) && fsSync.statSync(exe).size > 1_000_000) return { cmd: exe, pre: [] };
+  const js = path.join(pkg, 'cli.js');
+  if (fsSync.existsSync(js)) return { cmd: process.execPath, pre: [js] };
+  return null;
+}
+
+// .env에 적지 않아도 찾아보는 위치 (설치 규칙: D:\ProgramFiles)
+const WIN_GUESSES = [
+  'D:\\ProgramFiles\\ClaudeCode\\claude.cmd',
+  'D:\\ProgramFiles\\ClaudeCode\\claude.exe',
+  path.join(process.env.USERPROFILE || '', '.local', 'bin', 'claude.exe'),
+  path.join(process.env.APPDATA || '', 'npm', 'claude.cmd'),
+];
+
 async function resolveCli() {
-  if (config.claudeCode.cli) return { cmd: config.claudeCode.cli, pre: [] };
+  const set = config.claudeCode.cli;
+  if (set) return set.toLowerCase().endsWith('.cmd') ? fromShim(set) : { cmd: set, pre: [] };
   if (process.platform !== 'win32') return { cmd: 'claude', pre: [] };
   const found = await new Promise((resolve) => {
     const p = spawn('where', ['claude'], { windowsHide: true });
@@ -32,12 +51,10 @@ async function resolveCli() {
     p.on('error', () => resolve([]));
     p.on('close', () => resolve(out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)));
   });
-  const exe = found.find((f) => f.toLowerCase().endsWith('.exe'));
-  if (exe) return { cmd: exe, pre: [] };
-  const shim = found.find((f) => f.toLowerCase().endsWith('.cmd'));
-  if (shim) {
-    const js = path.join(path.dirname(shim), 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js');
-    if (fsSync.existsSync(js)) return { cmd: process.execPath, pre: [js] };
+  for (const f of [...found, ...WIN_GUESSES.filter((g) => fsSync.existsSync(g))]) {
+    const low = f.toLowerCase();
+    if (low.endsWith('.exe')) return { cmd: f, pre: [] };
+    if (low.endsWith('.cmd')) { const r = fromShim(f); if (r) return r; }
   }
   return null;
 }
