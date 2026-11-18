@@ -141,11 +141,12 @@ async function renderSegment(sc, index, fmt, dir, out) {
 
   if (sc.media.kind === 'image') {
     // 사진: 천천히 확대/축소 (번갈아가며)
-    const zoom = index % 2 === 0 ? `1+0.07*on/${frames}` : `1.07-0.07*on/${frames}`;
+    // 줌은 픽셀 단위로 반올림돼 덜덜 떨리기 쉬워서, 4배로 키운 뒤 줌하고 다시 줄인다 (떨림이 1/4 픽셀 이하)
+    const zoom = index % 2 === 0 ? `1+0.05*on/${frames}` : `1.05-0.05*on/${frames}`;
     const filter =
       `[0:v]split=2[a][b];[a]${bg}[bg];[b]${fg}[fg];` +
-      `[bg][fg]overlay=(W-w)/2:(H-h)/2,scale=${W * 2}:${H * 2},` +
-      `zoompan=z='${zoom}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=${W}x${H}:fps=${FPS},` +
+      `[bg][fg]overlay=(W-w)/2:(H-h)/2,scale=${W * 4}:${H * 4}:flags=bicubic,` +
+      `zoompan=z='${zoom}':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':d=${frames}:s=${W}x${H}:fps=${FPS},` +
       `setsar=1,format=yuv420p[v]`;
     await ffmpeg([
       '-i', path.join(dir, 'work', sc.media.normalized),
@@ -157,19 +158,51 @@ async function renderSegment(sc, index, fmt, dir, out) {
     const src = path.join(dir, 'media', sc.media.file);
     const shot = await findShot(src, sc.clip_start, sc.duration, sc.media.duration || sc.clip_start + sc.duration);
     const usable = shot.length;
-    const hold = Math.max(0, sc.duration - usable);
+    // 손떨림 보정 (남는 시간은 줌 없이 마지막 화면을 그대로 둔다: 줌은 영상 해상도에서 떨림이 생김)
+    const segDir = path.dirname(out);
+    const stab = await stabilizer(src, shot.start, usable, segDir, `seg_${index}`);
     const filter =
-      `[0:v]fps=${FPS},split=2[a][b];[a]${bg}[bg];[b]${fg}[fg];` +
+      `[0:v]fps=${FPS}${stab ? `,${stab}` : ''},split=2[a][b];[a]${bg}[bg];[b]${fg}[fg];` +
       `[bg][fg]overlay=(W-w)/2:(H-h)/2,tpad=stop_mode=clone:stop_duration=${sc.duration},` +
       `trim=duration=${sc.duration}` +
-      (hold > 0.3 ? `,zoompan=z='if(lt(on,${Math.round(usable * FPS)}),1,1+0.06*(on-${Math.round(usable * FPS)})/${Math.round(hold * FPS)})':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=${W}x${H}:fps=${FPS}` : '') +
       `,setsar=1,format=yuv420p[v]`;
     await ffmpeg([
       '-ss', String(shot.start), '-t', String(usable),
       '-i', src,
       '-filter_complex', filter, '-map', '[v]', '-frames:v', String(frames), ...enc, out,
-    ]);
+    ], { cwd: segDir });
   }
+}
+
+// ---------- 손떨림 보정 ----------
+let filterList;
+async function hasFilter(name) {
+  if (!filterList) {
+    const { run } = await import('./media.js');
+    filterList = await run(config.ffmpegPath, ['-hide_banner', '-filters']).catch(() => '');
+  }
+  return new RegExp(`\\s${name}\\s`).test(filterList);
+}
+
+/**
+ * 손떨림 보정 필터 문자열. STABILIZE=off 면 끔.
+ * vidstab(2단계: 흔들림 분석 → 보정)이 있으면 쓰고, 없으면 ffmpeg 기본 deshake.
+ * 분석 파일은 상대 경로로 써서 Windows 경로(D:\...) 문제를 피한다.
+ */
+async function stabilizer(src, start, length, cwd, name) {
+  if ((process.env.STABILIZE || 'on') === 'off') return '';
+  if (await hasFilter('vidstabdetect')) {
+    const trf = `${name}.trf`;
+    try {
+      await ffmpeg(['-ss', String(start), '-t', String(length), '-i', src,
+        '-vf', `fps=${FPS},vidstabdetect=shakiness=6:accuracy=12:result=${trf}`, '-f', 'null', '-'], { cwd });
+      // zoom=4: 보정하며 생기는 가장자리를 가리려고 4% 확대, smoothing=12: 약 0.4초 단위로 부드럽게
+      return `vidstabtransform=input=${trf}:smoothing=12:zoom=4:interpol=bicubic`;
+    } catch (err) {
+      console.warn('[stabilize] vidstab 분석 실패, deshake 사용:', err.message.slice(0, 120));
+    }
+  }
+  return (await hasFilter('deshake')) ? 'deshake=rx=32:ry=32:edge=mirror' : '';
 }
 
 /**

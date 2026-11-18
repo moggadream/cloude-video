@@ -11,32 +11,76 @@ async function exists(f) {
   try { await fs.access(f); return true; } catch { return false; }
 }
 
+import { spawn } from 'node:child_process';
+import { ROOT } from '../config.js';
+
+let edgeOk; // 무료 음성 사용 가능 여부 (한 번만 확인)
+async function edgeAvailable() {
+  if (edgeOk !== undefined) return edgeOk;
+  edgeOk = await new Promise((resolve) => {
+    const p = spawn(config.tts.python, ['-c', 'import edge_tts'], { windowsHide: true });
+    p.on('error', () => resolve(false));
+    p.on('close', (code) => resolve(code === 0));
+  });
+  if (!edgeOk) console.warn(`[tts] 무료 음성(edge-tts)을 쓸 수 없어요. "pip install edge-tts" 로 설치하면 나레이션이 들어가요.`);
+  return edgeOk;
+}
+
+/** 지금 쓸 나레이션 방식: 'elevenlabs' | 'edge' | null */
+export async function ttsProvider() {
+  const p = config.tts.provider;
+  if (p === 'off') return null;
+  if (p === 'elevenlabs') return config.elevenlabs.apiKey ? 'elevenlabs' : null;
+  if (p === 'edge') return (await edgeAvailable()) ? 'edge' : null;
+  if (config.elevenlabs.apiKey) return 'elevenlabs';
+  return (await edgeAvailable()) ? 'edge' : null;
+}
+
+function edgeTts(text, out) {
+  return new Promise((resolve, reject) => {
+    const p = spawn(config.tts.python, [path.join(ROOT, 'scripts', 'py', 'tts_edge.py'), config.tts.voice, config.tts.rate, out],
+      { windowsHide: true, env: { ...process.env, PYTHONIOENCODING: 'utf-8' } });
+    let err = '';
+    p.stderr.on('data', (d) => { err += d; });
+    p.on('error', reject);
+    p.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`무료 음성 생성 실패: ${err.slice(-300)}`))));
+    p.stdin.end(text, 'utf8');
+  });
+}
+
+async function elevenTts(text, out) {
+  const res = await fetch(
+    `${EL}/text-to-speech/${config.elevenlabs.voiceId}?output_format=mp3_44100_128`,
+    {
+      method: 'POST',
+      headers: { 'xi-api-key': config.elevenlabs.apiKey, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        model_id: config.elevenlabs.ttsModel,
+        language_code: 'ko',
+        voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.3 },
+      }),
+    },
+  );
+  if (!res.ok) throw new Error(`음성 생성 실패 (${res.status}): ${(await res.text()).slice(0, 300)}`);
+  await fs.writeFile(out, Buffer.from(await res.arrayBuffer()));
+}
+
 /**
  * 문장을 음성 파일로 만든다. 같은 문장은 캐시를 재사용한다.
- * 키가 없으면 null (자막만 나오는 영상이 된다).
+ * 음성을 만들 수 없으면 null (자막만 나오는 영상이 된다).
  */
 export async function narrate(text, workDir) {
-  if (!features.voice || !text.trim()) return null;
-  const hash = crypto.createHash('sha1')
-    .update(`${config.elevenlabs.voiceId}|${config.elevenlabs.ttsModel}|${text}`)
-    .digest('hex').slice(0, 16);
+  const provider = await ttsProvider();
+  if (!provider || !String(text || '').trim()) return null;
+  const key = provider === 'edge' ? `edge|${config.tts.voice}|${config.tts.rate}` : `el|${config.elevenlabs.voiceId}|${config.elevenlabs.ttsModel}`;
+  const hash = crypto.createHash('sha1').update(`${key}|${text}`).digest('hex').slice(0, 16);
   const file = path.join(workDir, `tts_${hash}.mp3`);
   if (!(await exists(file))) {
-    const res = await fetch(
-      `${EL}/text-to-speech/${config.elevenlabs.voiceId}?output_format=mp3_44100_128`,
-      {
-        method: 'POST',
-        headers: { 'xi-api-key': config.elevenlabs.apiKey, 'content-type': 'application/json' },
-        body: JSON.stringify({
-          text,
-          model_id: config.elevenlabs.ttsModel,
-          language_code: 'ko',
-          voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.3 },
-        }),
-      },
-    );
-    if (!res.ok) throw new Error(`음성 생성 실패 (${res.status}): ${(await res.text()).slice(0, 300)}`);
-    await fs.writeFile(file, Buffer.from(await res.arrayBuffer()));
+    // 화면용 기호는 읽지 않게 정리 (이모지, ·, / 등)
+    const spoken = String(text).replace(/[\p{Extended_Pictographic}\u{FE0F}]/gu, '').replace(/[·|]/g, ', ').replace(/\s+/g, ' ').trim();
+    if (provider === 'edge') await edgeTts(spoken, file);
+    else await elevenTts(spoken, file);
   }
   return { file, duration: await audioDuration(file) };
 }

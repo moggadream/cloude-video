@@ -55,7 +55,7 @@
 
 ## 처음 설정 (한 번만)
 
-1. **Node.js 20 이상, ffmpeg** 설치 (PowerShell에서 `node -v`, `ffmpeg -version`으로 확인)
+1. **Node.js 20 이상, ffmpeg** 설치 (+ 나레이션 목소리를 원하면 **Python**; `start-windows.bat`이 무료 음성 패키지를 자동 설치) (PowerShell에서 `node -v`, `ffmpeg -version`으로 확인)
 2. 프로젝트 폴더에서 `.env.example`을 복사해 `.env`로 이름 바꾸기
 3. **텔레그램 봇 만들기**
    - 텔레그램에서 `@BotFather` 검색 → `/newbot` → 이름 정하기 → 받은 토큰을 `.env`의 `TELEGRAM_BOT_TOKEN=`에

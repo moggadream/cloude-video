@@ -49,6 +49,14 @@ export const config = {
     // 드라이브 웹에서 "결과" 폴더를 열었을 때의 주소 (텔레그램 버튼 링크)
     resultUrl: env('DRIVE_RESULT_URL'),
   },
+  tts: {
+    // 나레이션: auto(ElevenLabs 키 → 무료 edge 음성 → 없음) | elevenlabs | edge | off
+    provider: env('TTS_PROVIDER', 'auto'),
+    // 무료 음성: ko-KR-SunHiNeural(여) / ko-KR-InJoonNeural(남) / ko-KR-HyunsuMultilingualNeural(남)
+    voice: env('TTS_VOICE', 'ko-KR-SunHiNeural'),
+    rate: env('TTS_RATE', '+8%'),
+    python: env('PYTHON', process.platform === 'win32' ? 'python' : 'python3'),
+  },
   elevenlabs: {
     apiKey: env('ELEVENLABS_API_KEY'),
     // 한국어를 잘 읽는 목소리 ID로 바꿔 쓰세요 (ElevenLabs Voice Library)
@@ -72,6 +80,7 @@ export const config = {
 export const features = {
   // 실제 AI 사용 여부는 src/ai/index.js 의 aiBackend() 로 확인 (Claude Code 감지는 비동기)
   get ai() { return Boolean(config.anthropic.apiKey); },
-  get voice() { return Boolean(config.elevenlabs.apiKey); },
+  // 나레이션 사용 여부는 pipeline/audio.js 의 ttsProvider() 로 확인 (무료 음성은 설치 여부를 비동기로 확인)
+  get voice() { return Boolean(config.elevenlabs.apiKey) || config.tts.provider === 'edge'; },
   get aiMusic() { return Boolean(config.elevenlabs.apiKey) && config.elevenlabs.music; },
 };
