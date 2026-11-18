@@ -5,7 +5,9 @@ import { ROOT } from '../src/config.js';
 import { ffmpeg } from '../src/pipeline/media.js';
 
 const out = path.join(ROOT, 'samples');
-const font = path.join(ROOT, 'assets/fonts/NanumGothic-ExtraBold.ttf');
+// Windows의 'D:\\...' 경로는 필터 안에서 깨지므로, 프로젝트 폴더 기준 상대 경로로 쓴다
+const font = 'assets/fonts/NanumGothic-ExtraBold.ttf';
+const opts = { cwd: ROOT };
 await fs.mkdir(out, { recursive: true });
 
 const photos = [
@@ -19,7 +21,7 @@ for (const p of photos) {
     '-f', 'lavfi', '-i', `gradients=s=${p.w}x${p.h}:c0=${p.color}:c1=0xffffff:duration=1`,
     '-vf', `drawtext=fontfile=${font}:text='${p.text}':fontsize=${Math.round(p.w / 12)}:fontcolor=white:borderw=8:bordercolor=black:x=(w-tw)/2:y=(h-th)/2`,
     '-frames:v', '1', '-q:v', '3', path.join(out, p.name),
-  ]);
+  ], opts);
 }
 await ffmpeg([
   '-f', 'lavfi', '-i', 'testsrc2=s=1080x1920:r=30:d=8',
@@ -27,5 +29,5 @@ await ffmpeg([
   '-vf', `drawtext=fontfile=${font}:text='매장 둘러보기 영상':fontsize=90:fontcolor=white:borderw=6:x=(w-tw)/2:y=h*0.2`,
   '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest',
   path.join(out, 'v1_walk.mp4'),
-]);
+], opts);
 console.log('samples/ 에 샘플을 만들었어요:', (await fs.readdir(out)).join(', '));
