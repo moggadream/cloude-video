@@ -13,6 +13,7 @@ async function exists(f) {
 
 import { spawn } from 'node:child_process';
 import { ROOT } from '../config.js';
+import { currentVoice } from '../voices.js';
 
 let edgeOk; // 무료 음성 사용 가능 여부 (한 번만 확인)
 async function edgeAvailable() {
@@ -26,19 +27,45 @@ async function edgeAvailable() {
   return edgeOk;
 }
 
-/** 지금 쓸 나레이션 방식: 'elevenlabs' | 'edge' | null */
+/**
+ * 지금 쓸 나레이션 방식: 'elevenlabs' | 'azure' | 'edge' | null
+ * azure = 마이크로소프트 공식 음성 서비스(상업 이용 가능, 매달 무료 사용량 있음). 목소리는 edge와 같다.
+ */
 export async function ttsProvider() {
   const p = config.tts.provider;
   if (p === 'off') return null;
   if (p === 'elevenlabs') return config.elevenlabs.apiKey ? 'elevenlabs' : null;
+  if (p === 'azure') return config.azure.key ? 'azure' : null;
   if (p === 'edge') return (await edgeAvailable()) ? 'edge' : null;
   if (config.elevenlabs.apiKey) return 'elevenlabs';
+  if (config.azure.key) return 'azure';
   return (await edgeAvailable()) ? 'edge' : null;
 }
 
-function edgeTts(text, out) {
+const xmlEscape = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+
+async function azureTts(text, out, voice) {
+  // 다국어 목소리(비비엔 등)도 한국어로 읽도록 <lang> 으로 지정
+  const multi = /Multilingual/.test(voice);
+  const body = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="ko-KR"><voice name="${voice}">`
+    + `<prosody rate="${config.tts.rate}">${multi ? `<lang xml:lang="ko-KR">${xmlEscape(text)}</lang>` : xmlEscape(text)}</prosody></voice></speak>`;
+  const res = await fetch(`https://${config.azure.region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
+    method: 'POST',
+    headers: {
+      'Ocp-Apim-Subscription-Key': config.azure.key,
+      'Content-Type': 'application/ssml+xml',
+      'X-Microsoft-OutputFormat': 'audio-24khz-96kbitrate-mono-mp3',
+      'User-Agent': 'cloude-video',
+    },
+    body,
+  });
+  if (!res.ok) throw new Error(`Azure 음성 생성 실패 (${res.status}): ${(await res.text()).slice(0, 300)}`);
+  await fs.writeFile(out, Buffer.from(await res.arrayBuffer()));
+}
+
+function edgeTts(text, out, voice) {
   return new Promise((resolve, reject) => {
-    const p = spawn(config.tts.python, [path.join(ROOT, 'scripts', 'py', 'tts_edge.py'), config.tts.voice, config.tts.rate, out],
+    const p = spawn(config.tts.python, [path.join(ROOT, 'scripts', 'py', 'tts_edge.py'), voice, config.tts.rate, out],
       { windowsHide: true, env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' } });
     let err = '';
     p.stderr.on('data', (d) => { err += d; });
@@ -73,13 +100,15 @@ async function elevenTts(text, out) {
 export async function narrate(text, workDir) {
   const provider = await ttsProvider();
   if (!provider || !String(text || '').trim()) return null;
-  const key = provider === 'edge' ? `edge|${config.tts.voice}|${config.tts.rate}` : `el|${config.elevenlabs.voiceId}|${config.elevenlabs.ttsModel}`;
+  const voice = currentVoice();
+  const key = provider === 'elevenlabs' ? `el|${config.elevenlabs.voiceId}|${config.elevenlabs.ttsModel}` : `${provider}|${voice}|${config.tts.rate}`;
   const hash = crypto.createHash('sha1').update(`${key}|${text}`).digest('hex').slice(0, 16);
   const file = path.join(workDir, `tts_${hash}.mp3`);
   if (!(await exists(file))) {
     // 화면용 기호는 읽지 않게 정리 (이모지, ·, / 등)
     const spoken = String(text).replace(/[\p{Extended_Pictographic}\u{FE0F}]/gu, '').replace(/[·|]/g, ', ').replace(/\s+/g, ' ').trim();
-    if (provider === 'edge') await edgeTts(spoken, file);
+    if (provider === 'edge') await edgeTts(spoken, file, voice);
+    else if (provider === 'azure') await azureTts(spoken, file, voice);
     else await elevenTts(spoken, file);
   }
   return { file, duration: await audioDuration(file) };

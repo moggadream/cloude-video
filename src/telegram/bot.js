@@ -16,6 +16,8 @@ import { driveReady, listUploadFolders, createProjectFromFolder, conceptFromName
 import { aiStatus } from '../ai/index.js';
 import { kindOf } from '../pipeline/media.js';
 import { CONCEPTS, CONCEPT_BY_ID, guideText, totals } from '../guides/concepts.js';
+import { VOICES, VOICE_BY_ID, currentVoiceInfo, setVoice } from '../voices.js';
+import { narrate, ttsProvider } from '../pipeline/audio.js';
 
 const MAX_UPLOAD = 49 * 1024 * 1024; // 봇이 보낼 수 있는 파일 크기 (50MB 제한)
 const stateFile = () => path.join(config.dataDir, 'telegram-state.json');
@@ -83,6 +85,7 @@ export async function startTelegram() {
         { command: 'make', description: '자료로 콘텐츠 만들기' },
         { command: 'list', description: '최근 작업 보기' },
         { command: 'status', description: 'AI·드라이브 연결 상태' },
+        { command: 'voice', description: '나레이션 목소리 고르기' },
         { command: 'help', description: '사용법' },
       ],
     }).catch(() => {});
@@ -156,7 +159,7 @@ ${driveReady()
  • ✅ 승인 / ✏️ 수정 / ⏸ 보류 버튼
  • 수정은 버튼을 누르고 어떻게 고칠지 적거나, 결과 메시지에 "답장"으로 적어도 돼요.
 
-/list 최근 작업 · /status 연결 상태`;
+/list 최근 작업 · /status 연결 상태 · /voice 나레이션 목소리 고르기`;
 
 async function onMessage(msg) {
   const text = (msg.text || '').trim();
@@ -169,6 +172,7 @@ async function onMessage(msg) {
   if (/^\/status\b/.test(text)) return sendStatus();
   if (/^\/guide\b/.test(text) || /^(촬영\s*)?가이드/.test(text)) return sendGuideMenu();
   if (/^\/list\b/.test(text)) return sendList();
+  if (/^\/voice\b/.test(text) || /^목소리/.test(text)) return sendVoiceMenu();
 
   // 결과 메시지에 답장 → 그 결과물 수정
   const replied = msg.reply_to_message && st.msgMap[msg.reply_to_message.message_id];
@@ -314,6 +318,13 @@ async function onCallback(q) {
   const answer = (text) => call('answerCallbackQuery', { callback_query_id: q.id, ...(text ? { text } : {}) }).catch(() => {});
 
   if (data === 'mkin') { await answer(); return startInbox(); }
+  if (data.startsWith('vo:')) {
+    const v = VOICE_BY_ID[data.slice(3)];
+    if (!v) return answer('알 수 없는 목소리');
+    setVoice(v.id);
+    await answer(`${v.name} 목소리로 바꿨어요`);
+    return sendVoiceSample(v);
+  }
   if (data.startsWith('gd:')) {
     const c = CONCEPT_BY_ID[data.slice(3)];
     await answer();
@@ -497,12 +508,39 @@ async function sendGuideMenu() {
   return send('어떤 걸 만들 건가요? 누르면 무엇을 몇 컷 찍을지 알려드려요.\n(📷 사진 장수, 🎥 영상 개수)', kb(rows));
 }
 
+// ---------- 목소리 ----------
+
+async function sendVoiceMenu() {
+  const now = currentVoiceInfo();
+  const provider = await ttsProvider();
+  const note = provider === 'azure' ? '마이크로소프트 공식 음성 (상업 이용 가능)'
+    : provider === 'edge' ? '무료 edge 음성 (개인 시험용)'
+      : provider === 'elevenlabs' ? 'ElevenLabs (이 메뉴의 목소리 대신 ElevenLabs 목소리를 써요)'
+        : '나레이션 꺼짐 (목소리 설치 필요)';
+  return send(`🎙 나레이션 목소리\n지금: ${now.name} (${now.desc})\n방식: ${note}\n\n고르면 다음 영상부터 그 목소리로 만들고, 들어볼 수 있게 보내 드려요.`, {
+    reply_markup: { inline_keyboard: VOICES.map((v) => [{ text: `${v.id === now.id ? '✅ ' : ''}${v.name} · ${v.desc}`, callback_data: `vo:${v.id}` }]) },
+  });
+}
+
+async function sendVoiceSample(v) {
+  const dir = path.join(config.dataDir, 'voice-samples');
+  await fs.mkdir(dir, { recursive: true });
+  try {
+    const r = await narrate('안녕하세요. 오늘 다녀온 곳, 솔직하게 정리해 봤어요. 이 가격이면 그냥 지나칠 수가 없더라고요.', dir);
+    if (!r) return send(`${v.name} 목소리로 정했어요. (지금은 목소리 프로그램이 없어 미리듣기를 못 보내요)`);
+    await upload('sendAudio', 'audio', r.file, { chat_id: chatId(), title: `${v.name} 목소리`, performer: 'cloude-video' }, `${v.name}.mp3`);
+  } catch (err) {
+    return send(`${v.name} 목소리로 정했어요. 미리듣기는 만들지 못했어요: ${err.message.slice(0, 200)}`);
+  }
+}
+
 async function sendStatus() {
   const ai = await aiStatus();
   const folders = driveReady() ? await listUploadFolders() : [];
   return send([
     '📊 연결 상태',
     `• AI: ${ai.label}${ai.cliVersion ? ` (${ai.cliVersion})` : ''}`,
+    `• 목소리: ${currentVoiceInfo().name} (${(await ttsProvider()) || '꺼짐'})`,
     `• 드라이브: ${driveReady() ? `연결됨 (${config.drive.dir})\n  업로드 폴더 ${folders.length}개, 새 폴더 ${folders.filter((f) => !f.projectId).length}개` : '연결 안 됨 (.env 의 DRIVE_DIR)'}`,
     `• 대기 중인 작업: ${queueLength()}개`,
   ].join('\n'));

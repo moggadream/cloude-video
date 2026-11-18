@@ -52,10 +52,16 @@ export const config = {
   tts: {
     // 나레이션: auto(ElevenLabs 키 → 무료 edge 음성 → 없음) | elevenlabs | edge | off
     provider: env('TTS_PROVIDER', 'auto'),
-    // 무료 음성: ko-KR-SunHiNeural(여) / ko-KR-InJoonNeural(남) / ko-KR-HyunsuMultilingualNeural(남)
+    // 기본 목소리 (텔레그램 /voice 로 고르면 그게 우선): 선희 ko-KR-SunHiNeural / 인준 ko-KR-InJoonNeural
+    // / 현수 ko-KR-HyunsuMultilingualNeural / 비비엔 fr-FR-VivienneMultilingualNeural
     voice: env('TTS_VOICE', 'ko-KR-SunHiNeural'),
     rate: env('TTS_RATE', '+8%'),
     python: env('PYTHON', process.platform === 'win32' ? 'python' : 'python3'),
+  },
+  // 마이크로소프트 공식 음성(Azure AI Speech): 상업 이용 가능, 매달 무료 사용량 있음
+  azure: {
+    key: env('AZURE_SPEECH_KEY'),
+    region: env('AZURE_SPEECH_REGION', 'koreacentral'),
   },
   elevenlabs: {
     apiKey: env('ELEVENLABS_API_KEY'),
@@ -81,6 +87,6 @@ export const features = {
   // 실제 AI 사용 여부는 src/ai/index.js 의 aiBackend() 로 확인 (Claude Code 감지는 비동기)
   get ai() { return Boolean(config.anthropic.apiKey); },
   // 나레이션 사용 여부는 pipeline/audio.js 의 ttsProvider() 로 확인 (무료 음성은 설치 여부를 비동기로 확인)
-  get voice() { return Boolean(config.elevenlabs.apiKey) || config.tts.provider === 'edge'; },
+  get voice() { return Boolean(config.elevenlabs.apiKey || config.azure.key) || config.tts.provider === 'edge'; },
   get aiMusic() { return Boolean(config.elevenlabs.apiKey) && config.elevenlabs.music; },
 };
