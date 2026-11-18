@@ -3,6 +3,8 @@ chcp 65001 >nul
 setlocal EnableDelayedExpansion
 title 나레이션 목소리 설치
 cd /d "%~dp0"
+set "PYTHONUTF8=1"
+set "PYTHONIOENCODING=utf-8"
 
 rem ── 프로그램 설치 위치 (사용자 규칙: 모든 프로그램은 D:\ProgramFiles 에) ──
 set "PF=D:\ProgramFiles"

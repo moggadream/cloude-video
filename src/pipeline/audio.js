@@ -39,7 +39,7 @@ export async function ttsProvider() {
 function edgeTts(text, out) {
   return new Promise((resolve, reject) => {
     const p = spawn(config.tts.python, [path.join(ROOT, 'scripts', 'py', 'tts_edge.py'), config.tts.voice, config.tts.rate, out],
-      { windowsHide: true, env: { ...process.env, PYTHONIOENCODING: 'utf-8' } });
+      { windowsHide: true, env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' } });
     let err = '';
     p.stderr.on('data', (d) => { err += d; });
     p.on('error', reject);
