@@ -73,6 +73,16 @@ export const config = {
     modelDir: env('STT_MODEL_DIR', '') || firstExisting(['D:\\ProgramFiles\\asr\\models\\whisper']),
     language: env('STT_LANGUAGE', 'ko'),
   },
+  // 작은 사진 선명하게 (Real-ESRGAN). UPSCALE=off 로 끌 수 있다
+  upscale: {
+    mode: env('UPSCALE', 'auto'),
+    bin: env('UPSCALE_BIN', '') || firstExisting(['D:\\ProgramFiles\\Real-ESRGAN\\realesrgan-ncnn-vulkan.exe']),
+    model: env('UPSCALE_MODEL', 'realesrgan-x4plus'),
+    // 사진의 짧은 쪽이 이것보다 작으면 키운다 (세로 영상 가로폭 1080 기준)
+    minSide: Number(env('UPSCALE_MIN', '1080')),
+    // AI 결과와 원본 질감을 섞는 비율 (1 = AI 결과만). 실제 사진이 플라스틱처럼 보이지 않게
+    mix: Number(env('UPSCALE_MIX', '0.55')),
+  },
   // 마이크로소프트 공식 음성(Azure AI Speech): 상업 이용 가능, 매달 무료 사용량 있음
   azure: {
     key: env('AZURE_SPEECH_KEY'),

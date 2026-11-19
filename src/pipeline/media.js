@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { config } from '../config.js';
+import { needsUpscale, upscaleImage } from './upscale.js';
 
 export function run(cmd, args, { quiet = true, cwd } = {}) {
   return new Promise((resolve, reject) => {
@@ -78,12 +79,38 @@ export async function prepareMedia(item, dir) {
       '-vf', "scale='min(2160,iw)':'min(2160,ih)':force_original_aspect_ratio=decrease",
       '-q:v', '3', path.join(dir, 'work', norm),
     ]);
-    const info = await probe(path.join(dir, 'work', norm));
+    let info = await probe(path.join(dir, 'work', norm));
+    // 작은 사진은 Real-ESRGAN 으로 4배 키워 선명하게 (원본에서 매번 새로 만드므로 두 번 키워지지 않음)
+    const { upscaled: _old, ...rest } = item;
+    let upscaled = null;
+    if (needsUpscale(info.width, info.height)) {
+      const big = path.join(dir, 'work', `${item.id}_x4.jpg`);
+      if (await upscaleImage(path.join(dir, 'work', norm), big)) {
+        // AI 결과만 쓰면 실제 사진(음식·모래·피부)이 플라스틱처럼 매끈해지고 이음새 줄이 생길 수 있다.
+        // 원본을 같은 크기로 키운 것과 섞어 질감을 되살린다 (UPSCALE_MIX = AI 결과 비율)
+        const b = await probe(big);
+        const mix = Math.min(1, Math.max(0, config.upscale.mix));
+        await ffmpeg([
+          '-i', big, '-i', path.join(dir, 'work', norm),
+          '-filter_complex',
+          `[1:v]scale=${b.width}:${b.height}:flags=lanczos,format=yuv444p[o];[0:v]format=yuv444p[e];`
+          + `[e][o]blend=all_expr='A*${mix}+B*${(1 - mix).toFixed(2)}',`
+          + "scale='min(2160,iw)':'min(2160,ih)':force_original_aspect_ratio=decrease:flags=lanczos,format=yuvj420p",
+          '-frames:v', '1', '-q:v', '2', path.join(dir, 'work', `${item.id}_mix.jpg`),
+        ]);
+        await fs.rename(path.join(dir, 'work', `${item.id}_mix.jpg`), path.join(dir, 'work', norm));
+        await fs.rm(big, { force: true });
+        upscaled = { from: [info.width, info.height] };
+        info = await probe(path.join(dir, 'work', norm));
+        upscaled.to = [info.width, info.height];
+      }
+    }
     return {
-      ...item,
+      ...rest,
       normalized: norm,
       width: info.width,
       height: info.height,
+      ...(upscaled ? { upscaled } : {}),
       frames: [{ file: norm, time: 0 }],
     };
   }
