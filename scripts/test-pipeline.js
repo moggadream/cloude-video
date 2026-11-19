@@ -6,10 +6,16 @@ import { createProject, updateProject, projectDir, getProject } from '../src/sto
 import { processProject } from '../src/pipeline/index.js';
 import { kindOf } from '../src/pipeline/media.js';
 
-const sampleDir = path.join(ROOT, 'samples');
-const files = (await fs.readdir(sampleDir)).sort();
+// SAMPLE_DIR: 다른 자료 폴더, CONCEPT: 컨셉(restaurant, mart ...), PLACE·MEMO: 장소 이름·메모
+const sampleDir = process.env.SAMPLE_DIR || path.join(ROOT, 'samples');
+const files = (await fs.readdir(sampleDir)).sort().filter((f) => kindOf(f)); // 출처 메모 같은 글 파일은 뺀다
 const project = await createProject({
-  hints: { category: process.argv[2] || 'mart', placeName: '행복마트 역삼점', memo: '이번 주 과일 특가 행사 중' },
+  hints: {
+    category: process.argv[2] || 'auto',
+    concept: process.env.CONCEPT || (process.argv[2] ? undefined : 'mart'),
+    placeName: process.env.PLACE || '행복마트 역삼점',
+    memo: process.env.MEMO ?? '이번 주 과일 특가 행사 중',
+  },
 });
 const media = [];
 for (const [i, f] of files.entries()) {

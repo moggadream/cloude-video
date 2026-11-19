@@ -5,6 +5,10 @@ import { generate, aiBackend } from '../ai/index.js';
 import { loadSkill, loadStyleSamples, recentFeedback } from '../ai/skills.js';
 import { smallJpegBase64 } from './media.js';
 import { speechText } from './speech.js';
+import { FRAMINGS, FRAMING_IDS, storyboardFor, storyboardGuide, scoreStoryboard, autoStoryboard } from '../guides/storyboards.js';
+
+export const STORYBOARD_PASS = 75;
+const STORYBOARD_KEYS = ['shorts', 'reels', 'tiktok'];
 
 const SPEECH_NOTE = '## 영상 속 말소리 (자동 받아쓰기: 직원 설명·안내 방송·촬영자가 한 말)\n'
   + '- 화면에 없는 정보(메뉴 설명, 가격, 영업시간, 추천)가 있으면 사실로 써도 된다. 누가 한 말인지 모르면 "직원분이 ~래요"처럼 단정하지 말고 "~라고 하더라고요"로.\n'
@@ -45,14 +49,28 @@ const AnalysisSchema = z.object({
   shots: z.array(z.object({
     ref: z.string().describe("사진 'm3', 영상 장면 'm1:f5'"),
     description: z.string(),
+    framing: z.enum(FRAMING_IDS).describe(Object.entries(FRAMINGS).map(([k, v]) => `${k}=${v}`).join(', ')),
     items: z.array(z.object({ name: z.string(), price: z.string(), note: z.string() })),
     quality: z.enum(['good', 'ok', 'bad']),
     skip_reason: z.string(),
   })),
 });
 
+const StoryboardOut = z.object({
+  hook_title: z.string().describe('첫 컷 위의 큰 제목 2줄(\\n). 한 줄 10자 안팎. 숫자·동네·결론'),
+  beats: z.array(z.object({
+    beat: z.string().describe('기준의 비트 id (hook, hero, items ...)'),
+    shots: z.array(z.string()).describe('이 비트에서 차례로 보여줄 장면 ref. 여러 컷 비트는 2~6개'),
+    sec: z.number().describe('이 비트 전체 길이(초) = 컷 수 × 한 컷 길이'),
+    label: z.string().describe('번호 이름표(예: "1. 딸기 1팩"). 번호 이름표를 쓰는 컨셉의 목록 비트만, 아니면 빈칸'),
+    note: z.string().describe('이 비트에서 말할 핵심 한 줄 (사실만)'),
+  })),
+});
+
 const SceneOut = z.object({
   shot: z.string().describe("장면 목록의 ref (예: 'm1:f5', 'm3')"),
+  extra_shots: z.array(z.string()).describe('같은 나레이션 동안 이어서 보여줄 장면 ref (스토리보드의 나머지 컷). 없으면 빈 배열'),
+  label: z.string().describe('화면 위쪽 번호 이름표 (스토리보드의 label). 없으면 빈 문자열'),
   narration: z.string(),
   caption: z.string(),
   price_tag: z.string().describe('확인된 가격만. 없으면 빈 문자열'),
@@ -116,7 +134,7 @@ function shotTable(plan, project) {
     const info = byRef.get(s.ref);
     const where = info?.media.kind === 'video' ? `영상 ${fmtTime(info.time)} 지점` : '사진';
     const items = s.items.map((i) => `${i.name}${i.price ? ` ${i.price}` : ''}${i.note ? ` (${i.note})` : ''}`).join(', ');
-    return `${s.ref} | ${where} | ${s.quality}${s.skip_reason ? `(${s.skip_reason})` : ''} | ${s.description}${items ? ` | ${items}` : ''}`;
+    return `${s.ref} | ${where} | ${s.framing || '-'} | ${s.quality}${s.skip_reason ? `(${s.skip_reason})` : ''} | ${s.description}${items ? ` | ${items}` : ''}`;
   }).join('\n');
 }
 
@@ -160,8 +178,9 @@ export async function contextText(project, plan, key) {
     `- 장소 이름: ${plan.place_name || '(모름)'}`,
     `- 요약: ${plan.summary}`,
     '- 핵심 사실:', ...plan.key_facts.map((f) => `  - ${f}`), '',
-    '## 장면 목록 (ref | 위치 | 품질 | 보이는 것 | 상품·가격)', shotTable(plan, project),
+    '## 장면 목록 (ref | 위치 | 구도 | 품질 | 보이는 것 | 상품·가격)', shotTable(plan, project),
   ];
+  if (STORYBOARD_KEYS.includes(key) && plan.storyboard?.beats?.length) parts.push('', storyboardText(plan, key));
   const heard = speechText(project);
   if (heard) parts.push('', SPEECH_NOTE, heard);
   if (key === 'blog' || key === 'factcheck') {
@@ -238,6 +257,73 @@ async function analyze(project, dir) {
   });
 }
 
+// ---------- ①-2 스토리보드 (세로 숏폼의 컷 순서·구도·길이를 대본보다 먼저) ----------
+
+function shotInfoMap(plan) {
+  return new Map((plan.shots || []).map((s) => [s.ref, { framing: s.framing, quality: s.quality }]));
+}
+
+/** 대본 작성 때 보여줄 스토리보드 */
+function storyboardText(plan, key) {
+  const sb = plan.storyboard;
+  const lines = [
+    `## 스토리보드 (점수 ${sb.score}/100, 인기 쇼츠 기준과 비교해 통과한 컷 구성)`,
+    `- 첫 컷 제목: ${String(sb.hook_title || '').replace(/\n/g, ' / ')}`,
+    ...sb.beats.map((b, i) => `${i + 1}. [${b.beat}] 컷 ${b.shots.join(', ')} · ${b.sec}초${b.label ? ` · 이름표 "${b.label}"` : ''}${b.note ? ` · ${b.note}` : ''}`),
+    '',
+    '### 스토리보드로 장면 쓰는 법 (스킬의 장면 구성보다 이것이 우선)',
+    '- 비트 하나 = 장면 하나. 장면의 shot 은 그 비트의 첫 컷, extra_shots 는 나머지 컷 (같은 나레이션 동안 빠르게 이어짐).',
+    '- 항목마다 반복하는 비트(이름표가 다른 컷들)는 항목마다 장면을 나눠도 된다. 이때 label 은 그 항목의 이름표.',
+    '- 나레이션 길이는 비트 길이에 맞춘다 (1초에 약 5자). 컷이 빠른 비트는 나레이션도 짧게.',
+    '- label 은 스토리보드의 이름표를 그대로. 이름표가 없는 비트는 빈칸.',
+  ];
+  if (key !== 'shorts') lines.push('- 쇼츠와 같은 스토리보드를 쓰되, 첫 컷은 hook 비트의 다른 후보로 바꾸거나 비트 안의 컷 순서를 바꿔 겹치지 않게 해도 된다. 비트 순서는 지킨다.');
+  return lines.join('\n');
+}
+
+/**
+ * 스토리보드 만들기: 기준(인기 쇼츠 분석)에 맞춰 컷을 고르고 점수를 매긴다.
+ * 기준 점수(75) 미만이면 고칠 점을 알려주고 한 번 더 짠다. 그래도 낮으면 더 높은 쪽을 쓴다.
+ */
+export async function makeStoryboard(project, plan) {
+  const concept = plan.concept;
+  const info = shotInfoMap(plan);
+  const tpl = storyboardFor(concept);
+  const base = [
+    '## 이 컨셉의 스토리보드 기준 (인기 쇼츠를 컷 단위로 분석한 결과)', storyboardGuide(concept), '',
+    '## 장면 목록 (ref | 위치 | 구도 | 품질 | 보이는 것 | 상품·가격)', shotTable(plan, project), '',
+    `## 자료 요약\n- 장소: ${plan.place_name || '(모름)'}\n- ${plan.summary}\n- 핵심 사실: ${(plan.key_facts || []).join(' / ')}`,
+  ].join('\n');
+  const system = [
+    '당신은 한국 숏폼(쇼츠·릴스·틱톡) 편집자입니다. 대본을 쓰기 전에 컷 구성(스토리보드)만 짭니다.',
+    '- 기준의 비트 순서를 지키고, 각 비트에는 구도가 맞는 장면 ref 를 고릅니다. 품질 bad 장면은 쓰지 않습니다.',
+    '- 같은 장면을 두 번 쓰지 않습니다. 자료가 부족한 비트(꼭이 아닌 것)는 빼도 됩니다.',
+    '- sec 는 컷 수 × 기준 한 컷 길이로 맞춥니다. 전체 길이도 기준 범위 안으로.',
+    tpl.label ? '- 목록 비트의 컷마다 label 에 "번호. 이름(+용량·가격)"을 적습니다. 이름은 장면 목록에 있는 것만.' : '- label 은 모두 빈칸.',
+    '- note 에는 그 비트에서 전할 사실 한 줄 (장면 목록·자료 요약에 있는 것만).',
+  ].join('\n');
+
+  const attempts = [];
+  let feedback = '';
+  for (let i = 0; i < 2; i++) {
+    const sb = await generate({
+      system,
+      content: [{ type: 'text', text: `${base}${feedback}\n\n위 기준으로 세로 숏폼 스토리보드를 짜 주세요.` }],
+      schema: StoryboardOut,
+      label: '스토리보드',
+    });
+    sb.beats = (sb.beats || []).map((b) => ({ ...b, shots: (b.shots || []).filter((r) => info.has(r)), sec: Number(b.sec) || 0 }))
+      .filter((b) => b.shots.length);
+    const r = scoreStoryboard(sb, concept, info);
+    attempts.push({ ...sb, ...r });
+    if (r.score >= STORYBOARD_PASS) break;
+    feedback = `\n\n## 지난 스토리보드가 기준에 못 미쳤어요 (${r.score}점). 고칠 점:\n${r.issues.map((x) => `- ${x}`).join('\n')}`;
+  }
+  const best = attempts.reduce((a, b) => (b.score > a.score ? b : a));
+  console.log(`[storyboard] ${concept}: ${attempts.map((a) => a.score).join(' → ')}점 (${best.stats.cuts}컷, 평균 ${best.stats.avgCut}초)`);
+  return { ...best, concept, attempts: attempts.map((a) => ({ score: a.score, issues: a.issues })) };
+}
+
 // ---------- ② 플랫폼별 ----------
 
 export async function writePlatform(key, project, plan, siblings = '') {
@@ -274,6 +360,15 @@ export async function makePlan(project, dir, onStep = () => {}) {
   onStep('AI가 사진·영상을 살펴보는 중', 0);
   const analysis = await analyze(project, dir);
   const plan = { _source: backend, ...analysis };
+
+  onStep('스토리보드 짜는 중 (인기 쇼츠 기준과 비교)', 0.2);
+  try {
+    plan.storyboard = await makeStoryboard(project, plan);
+  } catch (err) {
+    console.warn('[storyboard] AI 스토리보드 실패, 기본 틀 사용:', err.message);
+    const sb = autoStoryboard(plan.concept, plan.shots || []);
+    plan.storyboard = { ...sb, ...scoreStoryboard(sb, plan.concept, shotInfoMap(plan)), concept: plan.concept, auto: true };
+  }
 
   let done = 0;
   onStep('플랫폼별 대본 쓰는 중', 0.3);
@@ -338,7 +433,7 @@ export function toShotForm(key, plan, project) {
   const cur = plan[key];
   const type = PLATFORMS[key].type;
   if (type === 'video') {
-    return { ...cur, scenes: cur.scenes.map((s) => ({ shot: s.shot || nearestShot(project, s.media_id, s.clip_start), narration: s.narration, caption: s.caption, price_tag: s.price_tag, chapter: s.chapter })) };
+    return { ...cur, scenes: cur.scenes.map((s) => ({ shot: s.shot || nearestShot(project, s.media_id, s.clip_start), extra_shots: (s.extra_shots || []).map((x) => x.shot || x), label: s.label || '', narration: s.narration, caption: s.caption, price_tag: s.price_tag, chapter: s.chapter })) };
   }
   if (type === 'carousel') return { slides: cur.slides.map(({ shot, headline, body }) => ({ shot, headline, body })), caption: cur.caption, hashtags: cur.hashtags };
   if (type === 'blog') return { title: cur.title, sections: cur.sections.map((s) => ({ heading: s.heading, body: s.body, shot: s.shot || s.media_id || '' })), hashtags: cur.hashtags };
@@ -415,16 +510,25 @@ export function mockPlan(project) {
   const video = (title, hook, refs, desc, extraTags = [], long = false) => ({
     title, hook, scenes: refs.map((r, i) => scene(r, i, long)), description: desc, hashtags: [...tags, ...extraTags],
   });
+  // 테스트 모드: 기본 스토리보드로 쇼츠를 만들어 빠른 컷·이름표 렌더링도 시험한다
+  const concept = CONCEPT_BY_ID[hint.concept] ? hint.concept : 'other';
+  const mockShots = allShots(project).map((s) => ({ ref: s.ref, framing: s.framing || 'medium', quality: 'ok' }));
+  const sb = autoStoryboard(concept, mockShots);
+  const sbVideo = sb.beats.length ? {
+    title: `${name} 1분 소개`, hook: `${name}\n가봤어요`, description: `[예시 설명] ${name} 짧게 소개해요.`, hashtags: tags,
+    scenes: sb.beats.map((b, i) => ({ ...scene(b.shots[0], i), extra_shots: b.shots.slice(1), label: storyboardFor(concept).label ? `${i}. ${w(i)}` : '' })),
+  } : null;
   return {
+    storyboard: { ...sb, concept, auto: true },
     _source: 'mock',
     category,
-    concept: CONCEPT_BY_ID[hint.concept] ? hint.concept : 'other',
+    concept,
     place_name: hint.placeName || '',
     summary: `[예시] ${name}에서 찍은 자료 ${project.media.length}개예요. ${memo}`.trim(),
     key_facts: memo ? [memo] : [],
     music_prompt: 'bright cheerful acoustic background music, light percussion, no vocals, 110 bpm',
     shots: allShots(project).map((s) => ({ ref: s.ref, description: `${s.media.kind === 'image' ? '사진' : '영상 장면'} (${s.media.originalName})`, items: [], quality: 'ok', skip_reason: '' })),
-    shorts: video(`${name} 1분 소개`, `${name}\n가봤어요`, pick(8), `[예시 설명] ${name} 짧게 소개해요.`),
+    shorts: sbVideo || video(`${name} 1분 소개`, `${name}\n가봤어요`, pick(8), `[예시 설명] ${name} 짧게 소개해요.`),
     reels: video(name, '여기 어디게?', pick(5, 1), `[예시 캡션] ${name} 다녀왔어요 ✨`, ['릴스']),
     tiktok: video(`${name} 실화?`, '이거 실화냐', pick(6, 1).reverse(), `[예시 캡션] ${name} 가본 사람?`, ['틱톡']),
     longform: video(`${name} 자세히 둘러보기`, `${name} 투어`, shots, `[예시 설명] ${name}을 처음부터 끝까지 보여드려요.`, [], true),
@@ -469,6 +573,9 @@ const TAG_MAX = { shorts: 5, reels: 5, tiktok: 5, longform: 5, carousel: 5, blog
  * - 없는 ref 제거, 해시태그 정리
  * @param {string[]} [only] 이 결과물만 다시 정리 (수정 요청 후)
  */
+// 짧은 영상은 처음부터, 긴 영상은 그 장면 직전부터
+const clipStartOf = (s) => (s.media.kind === 'video' && s.media.frames.length > 3 ? Math.max(0, Math.round((s.time - 0.3) * 10) / 10) : 0);
+
 export function finalizePlan(plan, project, only = null) {
   const shots = allShots(project);
   const byRef = new Map(shots.map((s) => [s.ref, s]));
@@ -492,11 +599,19 @@ export function finalizePlan(plan, project, only = null) {
         if (sc.media_id && !sc.shot) return sc; // 이미 변환된 장면
         const s = resolve(sc.shot);
         if (!s) return null;
+        // 같은 나레이션 동안 이어서 보여줄 컷 (스토리보드의 빠른 컷)
+        const extras = [];
+        for (const x of Array.isArray(sc.extra_shots) ? sc.extra_shots : []) {
+          if (x && typeof x === 'object' && x.media_id) { extras.push(x); continue; } // 이미 변환됨
+          const e = resolve(x);
+          if (e && e.ref !== s.ref && !extras.some((y) => y.shot === e.ref)) extras.push({ shot: e.ref, media_id: e.media.id, clip_start: clipStartOf(e) });
+        }
         return {
           shot: s.ref,
           media_id: s.media.id,
-          // 짧은 영상은 처음부터, 긴 영상은 그 장면 직전부터
-          clip_start: s.media.kind === 'video' && s.media.frames.length > 3 ? Math.max(0, Math.round((s.time - 0.3) * 10) / 10) : 0,
+          clip_start: clipStartOf(s),
+          extra_shots: extras.slice(0, 6),
+          label: String(sc.label || '').trim(),
           narration: String(sc.narration || '').trim(),
           caption: String(sc.caption || '').trim(),
           price_tag: firstPrice(sc.price_tag),
@@ -504,7 +619,7 @@ export function finalizePlan(plan, project, only = null) {
         };
       }).filter(Boolean);
       if (!scenes.length) {
-        scenes = spread(shots, 6).map((s) => ({ shot: s.ref, media_id: s.media.id, clip_start: 0, narration: '', caption: '', price_tag: '', chapter: '' }));
+        scenes = spread(shots, 6).map((s) => ({ shot: s.ref, media_id: s.media.id, clip_start: 0, extra_shots: [], label: '', narration: '', caption: '', price_tag: '', chapter: '' }));
       }
       cur.scenes = scenes;
       cur.hook = String(cur.hook || '').replace(/\\n/g, '\n');

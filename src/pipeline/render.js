@@ -60,13 +60,17 @@ export async function renderVideo({ format, script, project, dir, musicPrompt, o
   if (scenes.length === 0) throw new Error(`${fmt.label}: 사용할 장면이 없습니다`);
   onProgress(0.1);
 
-  // 2) 장면 영상 조각 만들기
+  // 2) 컷 나누기: 한 장면(나레이션 한 줄)에 extra_shots 가 있으면 장면 길이를 나눠 빠르게 이어 붙인다
+  const framingOf = new Map((project.plan?.shots || []).map((s) => [s.ref, s.framing]));
+  const cuts = splitCuts(scenes, mediaById).map((c) => ({ ...c, framing: framingOf.get(c.shot) || '' }));
+
+  // 3) 컷 영상 조각 만들기
   const segFiles = [];
-  for (const [i, sc] of scenes.entries()) {
+  for (const [i, cut] of cuts.entries()) {
     const out = path.join(work, `seg_${String(i).padStart(3, '0')}.mp4`);
-    await renderSegment(sc, i, fmt, dir, out);
+    await renderSegment(cut, i, fmt, dir, out);
     segFiles.push(out);
-    onProgress(0.1 + 0.6 * ((i + 1) / scenes.length));
+    onProgress(0.1 + 0.6 * ((i + 1) / cuts.length));
   }
 
   // 3) 이어 붙이기
@@ -126,10 +130,56 @@ export async function renderVideo({ format, script, project, dir, musicPrompt, o
     music: music.source,
     chapters: format === 'longform' ? chapterList(scenes) : [],
     sceneCount: scenes.length,
+    cutCount: cuts.length,
+    avgCut: Math.round((total / cuts.length) * 10) / 10,
+    // 스토리보드 비교용: 실제로 화면에 나간 컷 (시작 시각·길이·장면 ref)
+    cuts: cuts.map((c) => ({ t: Math.round(c.start * 10) / 10, d: Math.round(c.duration * 10) / 10, shot: c.shot, fill: c.fill })),
     plannedScenes: script.scenes.length,
     usedMedia: [...new Set(scenes.map((s) => s.media_id))],
     renderedAt: new Date().toISOString(),
   };
+}
+
+const MIN_CUT = 0.9; // 컷 하나의 최소 길이(초)
+
+/** 장면을 컷으로 나눈다 (장면 길이는 그대로, 컷마다 같은 길이) */
+export function splitCuts(scenes, mediaById) {
+  const cuts = [];
+  for (const sc of scenes) {
+    const list = [{ shot: sc.shot, media: sc.media, clip_start: sc.clip_start }];
+    for (const x of sc.extra_shots || []) {
+      const m = mediaById.get(x.media_id);
+      if (m) list.push({ shot: x.shot, media: m, clip_start: x.clip_start || 0 });
+    }
+    const n = Math.max(1, Math.min(list.length, Math.floor(sc.duration / MIN_CUT)));
+    const totalFrames = Math.round(sc.duration * FPS);
+    let used = 0;
+    for (let i = 0; i < n; i++) {
+      const f = i === n - 1 ? totalFrames - used : Math.round(totalFrames / n);
+      cuts.push({ ...list[i], start: sc.start + used / FPS, duration: f / FPS });
+      used += f;
+    }
+  }
+  return cuts;
+}
+
+/**
+ * 화면 채우는 방식: 인기 쇼츠는 화면을 꽉 채운다 (흐린 배경으로 위아래를 채우지 않음)
+ * - 'cover': 꽉 채우고 넘치는 부분은 자름
+ * - 'pan'  : 세로 화면에 가로 사진 → 꽉 채우고 옆으로 천천히 훑기
+ * - 'fit'  : 흐린 배경 위에 전체를 보여줌 (가로 화면에 세로 자료, FILL=off 일 때)
+ */
+export function fillMode(media, fmt, framing = '') {
+  if ((process.env.FILL || 'on') === 'off') return 'fit';
+  const ar = media.width && media.height ? media.width / media.height : fmt.w / fmt.h;
+  const vertical = fmt.h > fmt.w;
+  if (vertical) {
+    // 가로로 찍은 가격표·간판은 글자가 잘리면 안 되니 전체를 보여준다
+    if (media.kind === 'image' && ar > 0.85 && ['price', 'sign'].includes(framing)) return 'fit';
+    if (media.kind === 'image' && ar > 0.85) return 'pan';
+    return 'cover';
+  }
+  return ar >= 1.2 ? 'cover' : 'fit';
 }
 
 async function renderSegment(sc, index, fmt, dir, out) {
@@ -137,15 +187,37 @@ async function renderSegment(sc, index, fmt, dir, out) {
   const frames = Math.round(sc.duration * FPS);
   const bg = `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},boxblur=40:2,eq=brightness=-0.12:saturation=1.1`;
   const fg = `scale=${W}:${H}:force_original_aspect_ratio=decrease`;
+  const cover = `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H}`;
   const enc = ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-r', String(FPS), '-an'];
+  const mode = fillMode(sc.media, fmt, sc.framing);
+  sc.fill = mode;
+
+  if (sc.media.kind === 'image' && mode === 'pan') {
+    // 가로 사진: 높이에 맞춰 키운 뒤 왼쪽↔오른쪽으로 천천히 훑기 (2배로 키워 움직임을 부드럽게)
+    // 아주 넓은 사진은 가운데 60%만 훑는다 (너무 빠르지 않게)
+    const dur = sc.duration.toFixed(3);
+    const along = index % 2 === 0 ? `t/${dur}` : `(1-t/${dur})`;
+    const filter =
+      `[0:v]scale=-2:${H * 2}:flags=bicubic,` +
+      `crop=${W * 2}:${H * 2}:x='(iw-ow)*(0.2*gt(iw/ow\\,2.2)+(1-0.4*gt(iw/ow\\,2.2))*${along})':y=0,` +
+      `scale=${W}:${H}:flags=bicubic,setsar=1,format=yuv420p[v]`;
+    await ffmpeg([
+      '-loop', '1', '-framerate', String(FPS), '-t', dur,
+      '-i', path.join(dir, 'work', sc.media.normalized),
+      '-filter_complex', filter, '-map', '[v]', '-frames:v', String(frames), ...enc, out,
+    ]);
+    return;
+  }
 
   if (sc.media.kind === 'image') {
     // 사진: 천천히 확대/축소 (번갈아가며)
     // 줌은 픽셀 단위로 반올림돼 덜덜 떨리기 쉬워서, 4배로 키운 뒤 줌하고 다시 줄인다 (떨림이 1/4 픽셀 이하)
     const zoom = index % 2 === 0 ? `1+0.05*on/${frames}` : `1.05-0.05*on/${frames}`;
+    const base = mode === 'fit'
+      ? `[0:v]split=2[a][b];[a]${bg}[bg];[b]${fg}[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,`
+      : `[0:v]${cover},`;
     const filter =
-      `[0:v]split=2[a][b];[a]${bg}[bg];[b]${fg}[fg];` +
-      `[bg][fg]overlay=(W-w)/2:(H-h)/2,scale=${W * 4}:${H * 4}:flags=bicubic,` +
+      `${base}scale=${W * 4}:${H * 4}:flags=bicubic,` +
       `zoompan=z='${zoom}':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':d=${frames}:s=${W}x${H}:fps=${FPS},` +
       `setsar=1,format=yuv420p[v]`;
     await ffmpeg([
@@ -161,9 +233,11 @@ async function renderSegment(sc, index, fmt, dir, out) {
     // 손떨림 보정 (남는 시간은 줌 없이 마지막 화면을 그대로 둔다: 줌은 영상 해상도에서 떨림이 생김)
     const segDir = path.dirname(out);
     const stab = await stabilizer(src, shot.start, usable, segDir, `seg_${index}`);
+    const frame = mode === 'fit'
+      ? `split=2[a][b];[a]${bg}[bg];[b]${fg}[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2`
+      : cover;
     const filter =
-      `[0:v]fps=${FPS}${stab ? `,${stab}` : ''},split=2[a][b];[a]${bg}[bg];[b]${fg}[fg];` +
-      `[bg][fg]overlay=(W-w)/2:(H-h)/2,tpad=stop_mode=clone:stop_duration=${sc.duration},` +
+      `[0:v]fps=${FPS}${stab ? `,${stab}` : ''},${frame},tpad=stop_mode=clone:stop_duration=${sc.duration},` +
       `trim=duration=${sc.duration}` +
       `,setsar=1,format=yuv420p[v]`;
     await ffmpeg([
@@ -292,6 +366,8 @@ function buildAss(scenes, script, fmt, format) {
     ['Hook', 'Black Han Sans', hookSize, '&H0000E1FF', '&H00000000', '&H64000000', 0, 1, 9, 3, 8, vertical ? 300 : 120],
     ['Price', 'NanumGothicExtraBold', priceSize, '&H00000000', '&H0000D7FF', '&H0000D7FF', 1, 3, 18, 0, 8, vertical ? 560 : 260],
     ['Chapter', 'NanumGothicExtraBold', chapSize, '&H00FFFFFF', '&H00000000', '&H96000000', 1, 3, 14, 0, 7, 60],
+    // 번호 이름표 (인기 목록형 쇼츠의 위쪽 흰 상자 "1. 상품명")
+    ['Label', 'NanumGothicExtraBold', Math.round(base * (vertical ? 0.052 : 0.042)), '&H00111111', '&H00FFFFFF', '&H00FFFFFF', 1, 3, 16, 0, 8, vertical ? 330 : 70],
   ];
   const header = [
     '[Script Info]',
@@ -315,9 +391,11 @@ function buildAss(scenes, script, fmt, format) {
     const end = Math.min(scenes[0].duration, 2.8);
     ev.push(`Dialogue: 2,${assTime(0)},${assTime(end)},Hook,,0,0,0,,{\\fad(100,250)}${assText(script.hook)}`);
   }
-  for (const sc of scenes) {
+  for (const [i, sc] of scenes.entries()) {
     const s = sc.start;
     const e = sc.start + sc.duration;
+    // 이름표: 첫 장면은 큰 제목(훅)과 겹치니 뺀다
+    if (sc.label && !(i === 0 && script.hook)) ev.push(`Dialogue: 2,${assTime(s + 0.05)},${assTime(e - 0.05)},Label,,0,0,0,,{\\fad(80,80)}${assText(sc.label)}`);
     if (sc.caption) ev.push(`Dialogue: 1,${assTime(s + 0.1)},${assTime(e - 0.05)},Caption,,0,0,0,,${fade}${assText(sc.caption)}`);
     if (sc.price_tag) {
       ev.push(`Dialogue: 3,${assTime(s + 0.35)},${assTime(e - 0.1)},Price,,0,0,0,,{\\fad(120,120)\\t(0,180,\\fscx112\\fscy112)\\t(180,320,\\fscx100\\fscy100)}${assText(sc.price_tag)}`);
