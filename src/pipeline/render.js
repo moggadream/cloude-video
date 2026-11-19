@@ -146,11 +146,13 @@ const MIN_CUT = 0.9; // 컷 하나의 최소 길이(초)
 export function splitCuts(scenes, mediaById) {
   const cuts = [];
   for (const sc of scenes) {
-    const list = [{ shot: sc.shot, media: sc.media, clip_start: sc.clip_start }];
+    let list = [{ shot: sc.shot, media: sc.media, clip_start: sc.clip_start }];
     for (const x of sc.extra_shots || []) {
       const m = mediaById.get(x.media_id);
       if (m) list.push({ shot: x.shot, media: m, clip_start: x.clip_start || 0 });
     }
+    // 같은 자료(영상)의 컷이 연달아 오면 한 컷처럼 보이므로 번갈아 놓는다 (장면 첫 컷은 그대로)
+    list = interleave(list);
     const n = Math.max(1, Math.min(list.length, Math.floor(sc.duration / MIN_CUT)));
     const totalFrames = Math.round(sc.duration * FPS);
     let used = 0;
@@ -161,6 +163,18 @@ export function splitCuts(scenes, mediaById) {
     }
   }
   return cuts;
+}
+
+function interleave(list) {
+  if (list.length < 3) return list;
+  const [first, ...rest] = list;
+  const out = [first];
+  while (rest.length) {
+    const last = out.at(-1).media.id;
+    const i = rest.findIndex((c) => c.media.id !== last);
+    out.push(...rest.splice(i >= 0 ? i : 0, 1));
+  }
+  return out;
 }
 
 /**

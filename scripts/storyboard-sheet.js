@@ -34,5 +34,16 @@ for (const f of formats) {
   const fr = cuts.map((c) => framing.get(c.shot) || '-');
   console.log(`- ${f}: ${v.duration}초 · ${cuts.length || v.sceneCount}컷 · 평균 ${v.avgCut ?? '-'}초 · 채우기 ${[...new Set(cuts.map((c) => c.fill))].join('/')}`);
   console.log(`  컷 구도: ${fr.join(' ')}`);
+  // 완성 영상 점검: 실제 컷 길이·같은 자료 연속 (기준과 비교)
+  const media = (s) => String(s).split(':')[0];
+  const same = cuts.filter((c, i) => i && media(c.shot) === media(cuts[i - 1].shot)).length;
+  const avg = v.avgCut ?? v.duration / (cuts.length || 1);
+  const [lo, hi] = tpl.cutSec;
+  const verdict = [
+    avg <= hi * 1.15 ? `컷 길이 ✅ ${avg}초` : `컷 길이 ❌ ${avg}초 (기준 ${lo}~${hi}초)`,
+    v.duration >= tpl.totalSec[0] && v.duration <= tpl.totalSec[1] * 1.1 ? `전체 길이 ✅` : `전체 길이 ❌ ${v.duration}초`,
+    same ? `같은 자료 연속 ❌ ${same}번` : '같은 자료 연속 ✅ 없음',
+  ];
+  console.log(`  완성본 점검: ${verdict.join(' · ')}`);
   console.log(`  화면 모음: ${out}`);
 }

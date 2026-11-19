@@ -186,6 +186,21 @@ export function scoreStoryboard(sb, concept, shotInfo) {
   if (inversions) issues.push(`비트 순서가 기준과 다름 (기준: ${order.join(' → ')})`);
   if (unknown.length) issues.push(`기준에 없는 비트 이름: ${unknown.join(', ')}`);
 
+  // 1-2) 비트 구도 맞음 (10): 각 컷의 구도가 그 비트의 기준 구도 안에 있는지
+  const tplById = new Map(t.beats.map((b) => [b.id, b]));
+  let fitN = 0; let fitOk = 0; const misfit = [];
+  for (const b of beats) {
+    const tb = tplById.get(b.beat);
+    if (!tb) continue;
+    for (const r of b.shots) {
+      fitN++;
+      const f = shotInfo.get(r)?.framing;
+      if (tb.framing.includes(f)) fitOk++; else misfit.push(`${b.beat}:${r}(${f || '모름'})`);
+    }
+  }
+  parts.fit = fitN ? Math.round(10 * (fitOk / fitN)) : 0;
+  if (misfit.length) issues.push(`비트와 구도가 안 맞는 컷: ${misfit.slice(0, 5).join(', ')} → 맞는 장면이 없으면 꼭이 아닌 비트는 뺀다`);
+
   // 2) 첫 컷 (15)
   const hookTpl = t.beats[0];
   const firstRef = beats[0].shots[0];
@@ -197,25 +212,25 @@ export function scoreStoryboard(sb, concept, shotInfo) {
   if (first.quality !== 'bad') parts.hook += 3;
   else issues.push(`첫 컷(${firstRef})이 품질 나쁨`);
 
-  // 3) 구도 비율 (20)
+  // 3) 구도 비율 (15)
   const cuts = beats.flatMap((b) => b.shots);
   const fr = cuts.map((r) => shotInfo.get(r)?.framing).filter(Boolean);
   const n = fr.length || 1;
   const closeR = fr.filter((f) => CLOSE.has(f)).length / n;
   const wideR = fr.filter((f) => WIDE.has(f)).length / n;
-  parts.mix = 20;
+  parts.mix = 15;
   if (closeR + 1e-9 < t.mix.minClose) { parts.mix -= Math.min(10, Math.round((t.mix.minClose - closeR) * 30)); issues.push(`가까운 컷 비율 ${Math.round(closeR * 100)}% → 기준 ${Math.round(t.mix.minClose * 100)}% 이상`); }
   if (t.mix.maxWide !== undefined && wideR > t.mix.maxWide + 1e-9) { parts.mix -= Math.min(10, Math.round((wideR - t.mix.maxWide) * 30)); issues.push(`넓은 컷 비율 ${Math.round(wideR * 100)}% → 기준 ${Math.round(t.mix.maxWide * 100)}% 이하`); }
   if (t.mix.minWide !== undefined && wideR + 1e-9 < t.mix.minWide) { parts.mix -= Math.min(10, Math.round((t.mix.minWide - wideR) * 30)); issues.push(`넓은 컷 비율 ${Math.round(wideR * 100)}% → 기준 ${Math.round(t.mix.minWide * 100)}% 이상`); }
   parts.mix = Math.max(0, parts.mix);
 
-  // 4) 컷 길이 (20)
+  // 4) 컷 길이 (15)
   const total = beats.reduce((a, b) => a + (Number(b.sec) || 0), 0);
   const avgCut = total / (cuts.length || 1);
   const [lo, hi] = t.cutSec;
-  parts.pace = 20;
-  if (avgCut < lo * 0.75 || avgCut > hi * 1.3) { parts.pace = 6; issues.push(`평균 컷 길이 ${avgCut.toFixed(1)}초 → 기준 ${lo}~${hi}초`); }
-  else if (avgCut < lo || avgCut > hi) { parts.pace = 14; issues.push(`평균 컷 길이 ${avgCut.toFixed(1)}초가 기준(${lo}~${hi}초) 경계 밖`); }
+  parts.pace = 15;
+  if (avgCut < lo * 0.75 || avgCut > hi * 1.3) { parts.pace = 4; issues.push(`평균 컷 길이 ${avgCut.toFixed(1)}초 → 기준 ${lo}~${hi}초`); }
+  else if (avgCut < lo || avgCut > hi) { parts.pace = 10; issues.push(`평균 컷 길이 ${avgCut.toFixed(1)}초가 기준(${lo}~${hi}초) 경계 밖`); }
 
   // 5) 전체 길이 (10)
   const [tl, th] = t.totalSec;
@@ -223,15 +238,26 @@ export function scoreStoryboard(sb, concept, shotInfo) {
   if (parts.length < 10) issues.push(`전체 ${Math.round(total)}초 → 기준 ${tl}~${th}초`);
 
   // 6) 같은 컷 반복·나쁜 컷 (5)
+  // 같은 영상의 장면을 연달아 쓰면 화면이 거의 같아 한 컷으로 보인다 (m3:f0 → m3:f1)
+  const mediaOf = (r) => String(r).split(':')[0];
+  let sameRun = 0;
+  for (let i = 1; i < cuts.length; i++) if (mediaOf(cuts[i]) === mediaOf(cuts[i - 1])) sameRun++;
+  if (sameRun) issues.push(`같은 영상의 장면을 ${sameRun}번 연달아 씀 → 한 컷처럼 보임. 다른 자료와 번갈아 놓거나 하나만`);
   const dup = cuts.length - new Set(cuts).size;
   const bad = cuts.filter((r) => shotInfo.get(r)?.quality === 'bad').length;
   const unknownRef = cuts.filter((r) => !shotInfo.has(r)).length;
-  parts.clean = Math.max(0, 5 - dup * 2 - bad * 2 - unknownRef * 2);
+  parts.clean = Math.max(0, 5 - dup * 2 - sameRun * 2 - bad * 2 - unknownRef * 2);
   if (dup) issues.push(`같은 컷을 ${dup}번 다시 씀`);
   if (bad) issues.push(`품질 나쁜 컷 ${bad}개 사용`);
   if (unknownRef) issues.push(`장면 목록에 없는 ref ${unknownRef}개`);
 
-  const score = Object.values(parts).reduce((a, b) => a + b, 0);
+  let score = Object.values(parts).reduce((a, b) => a + b, 0);
+  // 눈에 바로 띄는 문제는 점수와 상관없이 다시 짜게 한다 (기준 75점 미만으로)
+  const gate = [];
+  if (sameRun >= 2) gate.push('같은 영상 연속');
+  if (fitN && misfit.length / fitN > 0.25) gate.push('구도 안 맞는 컷 많음');
+  if (missing.length) gate.push('꼭 비트 빠짐');
+  if (gate.length) { score = Math.min(score, 74); issues.unshift(`통과 불가: ${gate.join(', ')}`); }
   return {
     score,
     parts,
