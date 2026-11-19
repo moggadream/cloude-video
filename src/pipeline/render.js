@@ -152,7 +152,7 @@ export function splitCuts(scenes, mediaById) {
       if (m) list.push({ shot: x.shot, media: m, clip_start: x.clip_start || 0 });
     }
     // 같은 자료(영상)의 컷이 연달아 오면 한 컷처럼 보이므로 번갈아 놓는다 (장면 첫 컷은 그대로)
-    list = interleave(list);
+    list = interleave(list, cuts.at(-1)?.media.id);
     const n = Math.max(1, Math.min(list.length, Math.floor(sc.duration / MIN_CUT)));
     const totalFrames = Math.round(sc.duration * FPS);
     let used = 0;
@@ -165,7 +165,12 @@ export function splitCuts(scenes, mediaById) {
   return cuts;
 }
 
-function interleave(list) {
+function interleave(list, prevMedia) {
+  // 앞 장면의 마지막 컷과 같은 자료로 시작하면, 다른 자료 컷을 앞으로
+  if (prevMedia && list[0].media.id === prevMedia) {
+    const k = list.findIndex((c) => c.media.id !== prevMedia);
+    if (k > 0) list = [list[k], ...list.slice(0, k), ...list.slice(k + 1)];
+  }
   if (list.length < 3) return list;
   const [first, ...rest] = list;
   const out = [first];

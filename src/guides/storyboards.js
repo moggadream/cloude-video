@@ -243,10 +243,20 @@ export function scoreStoryboard(sb, concept, shotInfo) {
   let sameRun = 0;
   for (let i = 1; i < cuts.length; i++) if (mediaOf(cuts[i]) === mediaOf(cuts[i - 1])) sameRun++;
   if (sameRun) issues.push(`같은 영상의 장면을 ${sameRun}번 연달아 씀 → 한 컷처럼 보임. 다른 자료와 번갈아 놓거나 하나만`);
+  // 같은 영상에서 8초 안쪽의 장면은 사실상 같은 화면 (떨어져 있어도 반복으로 보임)
+  const near = [];
+  for (let i = 0; i < cuts.length; i++) {
+    for (let j = i + 1; j < cuts.length; j++) {
+      if (cuts[i] === cuts[j] || mediaOf(cuts[i]) !== mediaOf(cuts[j]) || !String(cuts[i]).includes(':')) continue;
+      const a = shotInfo.get(cuts[i])?.time; const b = shotInfo.get(cuts[j])?.time;
+      if (a !== undefined && b !== undefined && Math.abs(a - b) < 8) near.push(`${cuts[i]}~${cuts[j]}`);
+    }
+  }
+  if (near.length) issues.push(`같은 영상에서 8초 안쪽 장면을 또 씀(같은 화면으로 보임): ${near.slice(0, 4).join(', ')} → 영상 하나에서 한 컷만`);
   const dup = cuts.length - new Set(cuts).size;
   const bad = cuts.filter((r) => shotInfo.get(r)?.quality === 'bad').length;
   const unknownRef = cuts.filter((r) => !shotInfo.has(r)).length;
-  parts.clean = Math.max(0, 5 - dup * 2 - sameRun * 2 - bad * 2 - unknownRef * 2);
+  parts.clean = Math.max(0, 5 - dup * 2 - sameRun * 2 - near.length - bad * 2 - unknownRef * 2);
   if (dup) issues.push(`같은 컷을 ${dup}번 다시 씀`);
   if (bad) issues.push(`품질 나쁜 컷 ${bad}개 사용`);
   if (unknownRef) issues.push(`장면 목록에 없는 ref ${unknownRef}개`);
@@ -255,6 +265,7 @@ export function scoreStoryboard(sb, concept, shotInfo) {
   // 눈에 바로 띄는 문제는 점수와 상관없이 다시 짜게 한다 (기준 75점 미만으로)
   const gate = [];
   if (sameRun >= 2) gate.push('같은 영상 연속');
+  if (near.length >= 2) gate.push('같은 화면 반복');
   if (fitN && misfit.length / fitN > 0.25) gate.push('구도 안 맞는 컷 많음');
   if (missing.length) gate.push('꼭 비트 빠짐');
   if (gate.length) { score = Math.min(score, 74); issues.unshift(`통과 불가: ${gate.join(', ')}`); }

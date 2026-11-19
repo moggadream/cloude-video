@@ -259,8 +259,9 @@ async function analyze(project, dir) {
 
 // ---------- ①-2 스토리보드 (세로 숏폼의 컷 순서·구도·길이를 대본보다 먼저) ----------
 
-function shotInfoMap(plan) {
-  return new Map((plan.shots || []).map((s) => [s.ref, { framing: s.framing, quality: s.quality }]));
+function shotInfoMap(plan, project) {
+  const time = new Map(project ? allShots(project).map((x) => [x.ref, x.time]) : []);
+  return new Map((plan.shots || []).map((s) => [s.ref, { framing: s.framing, quality: s.quality, time: time.get(s.ref) ?? 0 }]));
 }
 
 /** 대본 작성 때 보여줄 스토리보드 */
@@ -274,7 +275,8 @@ function storyboardText(plan, key) {
     '### 스토리보드로 장면 쓰는 법 (스킬의 장면 구성보다 이것이 우선)',
     '- 비트 하나 = 장면 하나. 장면의 shot 은 그 비트의 첫 컷, extra_shots 는 나머지 컷 (같은 나레이션 동안 빠르게 이어짐).',
     '- 항목마다 반복하는 비트(이름표가 다른 컷들)는 항목마다 장면을 나눠도 된다. 이때 label 은 그 항목의 이름표.',
-    '- 나레이션 길이는 비트 길이에 맞춘다 (1초에 약 5자). 컷이 빠른 비트는 나레이션도 짧게.',
+    '- 나레이션 길이는 비트 길이에 맞춘다 (1초에 약 5자). 컷이 빠른 비트는 나레이션도 짧게. 컷이 1개인 장면은 나레이션 12자 안팎.',
+    '- 스토리보드에 없는 컷을 더하지 않는다. 특히 같은 영상의 다른 장면(m3:f0과 m3:f1)은 거의 같은 화면이라 한 영상에서 한 컷만.',
     '- label 은 스토리보드의 이름표를 그대로. 이름표가 없는 비트는 빈칸.',
   ];
   if (key !== 'shorts') lines.push('- 쇼츠와 같은 스토리보드를 쓰되, 첫 컷은 hook 비트의 다른 후보로 바꾸거나 비트 안의 컷 순서를 바꿔 겹치지 않게 해도 된다. 비트 순서는 지킨다.');
@@ -287,7 +289,7 @@ function storyboardText(plan, key) {
  */
 export async function makeStoryboard(project, plan) {
   const concept = plan.concept;
-  const info = shotInfoMap(plan);
+  const info = shotInfoMap(plan, project);
   const tpl = storyboardFor(concept);
   const base = [
     '## 이 컨셉의 스토리보드 기준 (인기 쇼츠를 컷 단위로 분석한 결과)', storyboardGuide(concept), '',
@@ -370,7 +372,7 @@ export async function makePlan(project, dir, onStep = () => {}) {
   } catch (err) {
     console.warn('[storyboard] AI 스토리보드 실패, 기본 틀 사용:', err.message);
     const sb = autoStoryboard(plan.concept, plan.shots || []);
-    plan.storyboard = { ...sb, ...scoreStoryboard(sb, plan.concept, shotInfoMap(plan)), concept: plan.concept, auto: true };
+    plan.storyboard = { ...sb, ...scoreStoryboard(sb, plan.concept, shotInfoMap(plan, project)), concept: plan.concept, auto: true };
   }
 
   let done = 0;

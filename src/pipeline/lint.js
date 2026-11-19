@@ -1,5 +1,6 @@
 // 규칙 검사 (AI 없이 바로): 길이·개수·금지 표현·근거 없는 가격 등
 // 결과: { score: 0~100, issues: [{ level: 'error'|'warn', msg }] }
+import { storyboardFor } from '../guides/storyboards.js';
 
 export const AI_PHRASES = [
   '소개합니다', '소개해 드릴게요', '알아보겠습니다', '알아볼까요', '살펴볼까요', '살펴보겠습니다',
@@ -110,6 +111,36 @@ export function lintOutput(key, out, plan, project) {
     if (key !== 'longform') {
       const longNarr = out.scenes.filter((s) => s.narration.replace(/\s/g, '').length > 45);
       if (longNarr.length) add('warn', `나레이션이 긴 장면 ${longNarr.length}개 (공백 제외 45자 넘음)`);
+    }
+    // 같은 영상에서 8초 안쪽의 장면을 여러 번 쓰면 같은 화면이 반복돼 보인다 (컷 전체 기준)
+    if (key !== 'longform') {
+      const refOf = (x) => (typeof x === 'string' ? x : x?.shot || '');
+      const cuts = out.scenes.flatMap((s) => [s.shot, ...(s.extra_shots || []).map(refOf)]).filter(Boolean);
+      const timeOf = (ref) => {
+        const [mid, f] = String(ref).split(':f');
+        const m = (project?.media || []).find((x) => x.id === mid);
+        return m && f !== undefined ? m.frames?.[Number(f)]?.time : undefined;
+      };
+      const near = [];
+      for (let i = 0; i < cuts.length; i++) {
+        for (let j = i + 1; j < cuts.length; j++) {
+          const a = timeOf(cuts[i]); const b = timeOf(cuts[j]);
+          if (cuts[i].split(':')[0] === cuts[j].split(':')[0] && (cuts[i] === cuts[j] || (a !== undefined && b !== undefined && Math.abs(a - b) < 8))) near.push(`${cuts[i]}~${cuts[j]}`);
+        }
+      }
+      if (near.length) add(near.length >= 2 ? 'error' : 'warn', `같은 화면이 반복되는 컷: ${near.slice(0, 4).join(', ')} (같은 영상 8초 안쪽). 영상 하나에서 한 컷만 쓴다`);
+    }
+    // 스토리보드 컷 길이: 나레이션이 길면 컷이 늘어져 기준(인기 쇼츠)보다 느려진다 → 오류로 보고 자동 보완
+    if (key !== 'longform' && plan.storyboard?.beats?.length) {
+      const hi = storyboardFor(plan.concept).cutSec[1];
+      const slow = [];
+      out.scenes.forEach((s, i) => {
+        const cutsN = 1 + (s.extra_shots || []).length;
+        const chars = String(s.narration || '').replace(/\s/g, '').length;
+        const perCut = Math.max(2.2, chars / 6 + 0.9) / cutsN;
+        if (perCut > hi * 1.4) slow.push(`${i + 1}번(${chars}자, 컷 ${cutsN}개 → 공백 빼고 ${Math.max(6, Math.floor((hi * 1.2 * cutsN - 0.9) * 6))}자 이하)`);
+      });
+      if (slow.length) add(slow.length >= 2 ? 'error' : 'warn', `컷이 기준(${hi}초)보다 오래 머무는 장면: ${slow.join(', ')}. 나레이션을 줄이거나 그 비트의 컷(extra_shots)을 늘린다`);
     }
   }
   // 장소 이름 핵심(연도·○·공백 제외): "2026 ○○강 억새축제" → "강억새축제"
