@@ -5,3 +5,7 @@ samples/
 *.log
 .DS_Store
 style-samples/
+
+# 시험용 자료 파일 (목록·출처만 올림)
+tests/media/*/*
+!tests/media/*/SOURCES.md

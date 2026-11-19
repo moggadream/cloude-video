@@ -87,7 +87,8 @@ export function lintOutput(key, out, plan, project) {
   if (L.sec) {
     const sec = estimateSec(out.scenes);
     if (sec < L.sec[0] || sec > L.sec[1]) add('warn', `예상 길이 ${Math.round(sec)}초 (권장 ${L.sec[0]}~${L.sec[1]}초)`);
-    if (out.scenes.length < L.scenes[0] || out.scenes.length > L.scenes[1]) add('warn', `장면 ${out.scenes.length}개 (권장 ${L.scenes[0]}~${L.scenes[1]}개)`);
+    const usesBoard = out.scenes.some((s) => (s.extra_shots || []).length); // 스토리보드(빠른 컷)를 쓰면 장면 수 대신 컷 수가 기준
+    if (!usesBoard && (out.scenes.length < L.scenes[0] || out.scenes.length > L.scenes[1])) add('warn', `장면 ${out.scenes.length}개 (권장 ${L.scenes[0]}~${L.scenes[1]}개)`);
     const longCaps = out.scenes.filter((s) => s.caption.length > CAPTION_MAX);
     if (longCaps.length) add('warn', `화면 자막이 긴 장면 ${longCaps.length}개 (${CAPTION_MAX}자 넘음): "${longCaps[0].caption}"`);
     const hookLines = String(out.hook || '').split('\n');

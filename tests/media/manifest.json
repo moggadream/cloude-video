@@ -1,0 +1,147 @@
+{
+  "_note": "시험용 자료 목록. 모두 Pexels(https://www.pexels.com/license/ : 무료, 상업 이용 가능, 출처 표시 불필요). 여러 장소에서 찍힌 자료를 모은 '가상 장소'라 장소 이름·메모는 지어낸 시험용이에요. 받기: node scripts/fetch-test-media.js [컨셉...]",
+  "sets": {
+    "restaurant": {
+      "place": "역삼 숯불 삼겹살집 (시험용 가상 장소)",
+      "memo": "평일 저녁 7시, 회사 동료 셋이랑 감. 웨이팅 20분. 삼겹살을 직원분이 다 구워주고 잘라주셔서 편했음. 고기 두께 두툼하고 겉이 바삭. 계란찜이 뚝배기에 나오는데 폭신하고 리필 됨. 소주 한 병 같이. 셋이 고기 4인분에 계란찜·된장찌개까지 먹고 배부름. 아쉬운 점: 옷에 냄새 많이 뱀, 테이블 간격 좁음.",
+      "items": [
+        ["v", 37905787, "sizzling-korean-bbq-grilling-experience"],
+        ["v", 34753874, "korean-bbq-samgyeopsal-on-grill"],
+        ["v", 39286800, "grill-master-slicing-korean-bbq-on-flat-grill"],
+        ["v", 29896995, "korean-bbq-grilling-pork-slices"],
+        ["v", 37905785, "delicious-korean-bbq-meat-grilled-on-table"],
+        ["v", 37391013, "delicious-korean-steamed-egg-dish-in-stone-pot"],
+        ["p", 34179560, "korean-cuisine-with-kimchi-stew-and-bbq"],
+        ["p", 33873627, "cozy-indoor-korean-bbq-restaurant-booth"],
+        ["p", 31663811, "cozy-korean-restaurant-interior-with-wooden-decor"],
+        ["p", 6314636, "soju-bottles-on-a-table"],
+        ["p", 18936031, "korean-bbq-restaurant"],
+        ["p", 23325485, "restaurant-menu-on-windows-of-building-in-city-in-seoul-south-korea"]
+      ]
+    },
+    "cafe": {
+      "place": "성수 디저트 카페 (시험용 가상 장소)",
+      "memo": "토요일 오후 3시, 친구랑 둘이. 자리 잡는 데 10분 기다림. 큰 창가 자리가 제일 인기, 오후 햇빛이 테이블까지 들어옴. 라떼 위에 하트 라떼아트 해줌. 케이크 진열장에 종류 많아서 고르기 어려웠고 초코 케이크랑 치즈케이크 시킴. 초코는 진하고 덜 달아서 좋았음. 2층까지 있는데 2층이 조용함. 아쉬운 점: 콘센트 적음.",
+      "items": [
+        ["v", 34601858, "barista-creating-latte-art-in-coffee-shop"],
+        ["v", 36377660, "delicious-cakes-and-pastries-in-a-cozy-cafe"],
+        ["v", 9356236, "person-slicing-a-cake"],
+        ["v", 31416777, "cozy-bakery-display-with-assorted-pastries"],
+        ["v", 40174865, "latte-art-served-in-a-cozy-cafe-setting"],
+        ["p", 34673920, "contemporary-cafe-interior-with-large-windows"],
+        ["p", 33388624, "modern-cafe-interior-overlooking-city-street"],
+        ["p", 20310533, "plant-behind-windows-in-cafe"],
+        ["p", 9828855, "cakes-displayed-on-glass-counter"],
+        ["p", 34788132, "cozy-cafe-scene-with-cappuccino-and-pastry"],
+        ["p", 15419008, "cake-and-drinks-on-display-in-a-cafe"]
+      ]
+    },
+    "mart": {
+      "place": "동네 대형마트 과일 코너 (시험용 가상 장소)",
+      "memo": "일요일 오전 10시 오픈 직후 감. 사람 적어서 장보기 편함. 이번 주 과일 행사 중이라 과일 코너가 입구 바로 앞으로 나와 있었음. 오렌지·키위·청사과가 많이 쌓여 있었고 박스 단위로 사는 사람 많음. 가격표가 상자마다 붙어 있음. 카트 끌고 한 바퀴 도는 데 30분. 아쉬운 점: 계산대 줄이 길었음.",
+      "items": [
+        ["v", 4081583, "a-man-walking-inside-the-supermarket"],
+        ["v", 35189918, "busy-supermarket-aisle-with-shoppers"],
+        ["v", 34988877, "choosing-fresh-green-apples-at-grocery-store"],
+        ["v", 34988875, "person-selecting-ripe-kiwis-at-grocery-store"],
+        ["v", 29846452, "woman-shopping-for-fruits-in-grocery-store"],
+        ["v", 9474086, "a-woman-shopping-in-a-supermarket-with-oranges"],
+        ["p", 12533724, "fresh-fruit-in-containers-with-price-tags"],
+        ["p", 7986975, "composition-of-sale-tags"],
+        ["p", 36940473, "young-woman-shopping-in-asian-supermarket"],
+        ["p", 6865456, "assorted-food-packs-on-white-shelves"],
+        ["p", 13568357, "orange-fruits-on-green-plastic-crate"],
+        ["p", 36142249, "vibrant-fruit-and-vegetable-market-display"]
+      ]
+    },
+    "market": {
+      "place": "서울 전통시장 먹거리 골목 (시험용 가상 장소)",
+      "memo": "금요일 저녁 6시, 혼자 감. 퇴근 시간이라 골목에 사람 많음. 꼬치 굽는 집 연기가 골목 입구까지 남. 전 부치는 가게 앞에 줄 서 있었음. 건어물 가게도 지나감. 꼬치 하나랑 전 한 접시 사서 서서 먹음. 현금만 받는 가게가 있어서 현금 챙기는 게 좋음. 아쉬운 점: 앉을 데가 거의 없음.",
+      "items": [
+        ["v", 36718309, "bustling-day-at-outdoor-market-in-seoul"],
+        ["v", 37814437, "bustling-korean-street-market-in-seoul"],
+        ["v", 37362904, "vibrant-seoul-street-market-in-myeongdong"],
+        ["v", 35610097, "street-food-grilling-sizzling-meats-on-skewers"],
+        ["v", 30748408, "street-food-vendor-making-traditional-pancakes"],
+        ["v", 37118391, "traditional-frying-on-open-fire-cooking"],
+        ["p", 35177678, "bustling-indoor-market-in-south-korea"],
+        ["p", 39275728, "bustling-street-market-in-seoul"],
+        ["p", 33202872, "street-vendor-cooking-korean-food-at-night-market"],
+        ["p", 37319817, "traditional-korean-market-stall-selling-various-dried-foods"],
+        ["p", 24498492, "photo-of-street-food-stalls-at-a-market-in-seoul"],
+        ["p", 35177681, "street-food-vendor-at-bustling-korean-market"]
+      ]
+    },
+    "park": {
+      "place": "서울 단풍 공원 산책길 (시험용 가상 장소)",
+      "memo": "11월 셋째 주 토요일 오전 10시. 단풍 거의 절정, 은행나무는 노랗게 다 들었음. 호수 한 바퀴 도는 길이 평평해서 유모차도 많음. 한 바퀴 천천히 40분. 낙엽 쌓인 길이 제일 예뻤고 호숫가 벤치에서 쉬었음. 화장실은 입구 쪽에 있음. 아쉬운 점: 오후엔 사람이 많아진다고 함.",
+      "items": [
+        ["v", 34362639, "scenic-autumn-pathway-lined-with-tall-trees"],
+        ["v", 34517791, "scenic-autumn-park-pathway-with-falling-leaves"],
+        ["v", 30342833, "autumn-walk-on-leaf-covered-pathway"],
+        ["v", 11351927, "walking-on-a-forest-path-point-of-view"],
+        ["v", 40003879, "peaceful-autumn-walk-by-scenic-lakeside"],
+        ["v", 29188858, "colorful-autumn-park-walk-with-orange-trees"],
+        ["p", 28494420, "vivid-autumn-foliage-in-seoul-south-korea-park"],
+        ["p", 36095103, "autumn-foliage-in-seoul-s-namsan-park"],
+        ["p", 29336466, "vibrant-ginkgo-tree-in-seoul-s-autumn"],
+        ["p", 14427076, "trees-with-fall-foliage-at-a-park"],
+        ["p", 29875515, "scenic-autumn-lake-view-in-busan-park"],
+        ["p", 10927736, "sidewalk-in-park-in-autumn"]
+      ]
+    },
+    "amusement": {
+      "place": "도심 놀이공원 (시험용 가상 장소)",
+      "memo": "평일 오후 1시, 초등학생 조카랑 둘이. 매표소 줄 5분. 대관람차 대기 15분, 회전그네는 바로 탐. 회전목마는 밤에 불 켜지니까 훨씬 예뻤음. 롤러코스터는 키 제한 있어서 조카는 못 탐. 해 지고 나서 조명 켜진 대관람차가 제일 볼만했음. 아쉬운 점: 먹거리가 비쌈.",
+      "items": [
+        ["v", 36008606, "exciting-ferris-wheel-and-swing-ride-at-amusement-park"],
+        ["v", 35385190, "thrilling-amusement-park-ride-sky-high"],
+        ["v", 9088700, "video-of-a-moving-ferris-wheel"],
+        ["v", 31399886, "vibrant-nighttime-amusement-park-ride"],
+        ["v", 36852754, "amusement-park-adventure-with-ferris-wheel"],
+        ["v", 28241743, "amusement-park-ride"],
+        ["p", 34519618, "colorful-ticket-booth-at-amusement-park"],
+        ["p", 31693189, "colorful-carousel-at-amusement-park"],
+        ["p", 12794451, "people-riding-a-roller-coaster"],
+        ["p", 18403853, "decoration-of-facade-at-amusement-park"],
+        ["p", 17467601, "a-ferris-wheel-at-the-carnival"],
+        ["p", 11922545, "people-standing-near-lighted-carousel-during-night-time"]
+      ]
+    },
+    "festival": {
+      "place": "강변 등불 축제 (시험용 가상 장소)",
+      "memo": "토요일 저녁 7시 반, 가족 넷이 감. 해 지고 나서 강 위 등불이 켜지는 게 하이라이트. 거리에도 빨간 등이 줄줄이 걸려 있음. 먹거리 부스에서 꼬치랑 구이 사 먹음. 아이들이 많아서 북적였고 강변 산책로는 걷기 천천히. 주차장이 꽉 차서 지하철 타고 가는 게 나음. 아쉬운 점: 먹거리 줄이 20분.",
+      "items": [
+        ["v", 38012328, "night-festival-on-lantern-lit-river"],
+        ["v", 31305851, "traditional-red-lanterns-at-night"],
+        ["v", 38774328, "children-enjoying-night-festival-in-city-streets"],
+        ["v", 37315766, "street-vendor-grilling-at-night-market"],
+        ["v", 40351610, "street-festival-vendor-preparing-food"],
+        ["v", 29605823, "stunning-lantern-festival-night-sky-event"],
+        ["p", 36749819, "colorful-lanterns-hanging-in-south-korea"],
+        ["p", 37319805, "vibrant-red-lanterns-hanging-at-korean-festival"],
+        ["p", 38128679, "traditional-korean-paper-lanterns-in-outdoor-display"],
+        ["p", 40100170, "vibrant-pink-lanterns-against-blue-sky-in-south-korea"],
+        ["p", 37119206, "colorful-lanterns-at-korean-temple-festival"],
+        ["p", 12480349, "rows-of-colorful-paper-lanterns"]
+      ]
+    },
+    "popup": {
+      "place": "캐릭터 굿즈 팝업스토어 (시험용 가상 장소)",
+      "memo": "평일 오후 4시, 혼자 감. 예약 없이 바로 입장, 대기 없음. 입구 쇼윈도부터 캐릭터로 꾸며져 있음. 안에 피규어·인형 진열장이 벽 한 면을 다 채움. 인형 코너가 제일 붐볐고 가격표가 상품마다 붙어 있음. 구경만 30분. 아쉬운 점: 인기 인형은 이미 품절.",
+      "items": [
+        ["v", 3735230, "branded-products-with-prices-on-display-for-sale"],
+        ["v", 41132118, "vibrant-shopping-experience-in-wuhan-store"],
+        ["v", 30849419, "vibrant-shop-window-with-lucky-cat-display"],
+        ["v", 7645414, "people-choosing-vinyl-records"],
+        ["p", 30678895, "street-view-of-a-whimsical-anime-themed-storefront"],
+        ["p", 33327474, "colorful-anime-and-collectibles-toy-store-display"],
+        ["p", 36274903, "colorful-plush-toys-display-in-store"],
+        ["p", 31858689, "colorful-indoor-exhibit-at-canva-suite-shop"],
+        ["p", 19066549, "smiling-woman-holding-teddy-toys-in-store"],
+        ["p", 36923643, "colorful-merchandise-shop-in-qingdao-china"],
+        ["p", 33166086, "chinese-toy-store-entrance-with-colorful-display"]
+      ]
+    }
+  }
+}

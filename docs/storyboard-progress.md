@@ -13,7 +13,8 @@
   - 렌더러: 화면 꽉 채우기(가로 사진은 옆으로 훑기, 가격표·간판은 전체), 한 나레이션 동안 여러 컷, 이름표 자막
   - 비교 도구: `node scripts/storyboard-sheet.js <작업ID>` → 만든 영상 12등분 화면 모음 + 컷 통계
   - 시험: `CONCEPT=mart SAMPLE_DIR=... node scripts/test-pipeline.js` (AI 없이는 `AI_MODE=off`)
-- [ ] 4. 자유 이용(CC) 시험 사진·영상 모으기 → `tests/media/<컨셉>/` (출처·라이선스 기록)
+- [x] 4. 시험 사진·영상 모으기: Pexels(무료·상업 이용 가능) 컨셉별 11~12개 → `tests/media/manifest.json`, 받기 `node scripts/fetch-test-media.js` (파일은 git 제외, 출처는 SOURCES.md). 위키미디어 공용은 한국 장소 영상이 거의 없어서 Pexels 로.
+  - 컨셉 하나 시험: `SAMPLE_DIR=tests/media/<c> CONCEPT=<c> PLACE=... MEMO="$(cat tests/media/<c>/memo.txt)" node scripts/test-pipeline.js` → `node scripts/storyboard-sheet.js <작업ID>`
 - [ ] 5. 컨셉별 실제 제작 → 스토리보드 일치도·장면 구도 비교 → 지침 고치기 (반복)
 - [ ] 6. 기록 정리 (`docs/learning-log.md`), 커밋·push
 
