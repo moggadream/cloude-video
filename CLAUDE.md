@@ -23,9 +23,11 @@
 ## 지금까지 진행 상황 (2026-11-19)
 - ✅ PC에서 `npm run sample` → `npm run test:pipeline` 성공: 영상 4종 + 캐러셀·쓰레드·블로그 7분 만에 완성, 목소리 나옴.
 - ✅ 나레이션 목소리 4종(선희·인준·현수·비비엔) 선택 기능: 텔레그램 `/voice` (`src/voices.js`). 무료 edge 음성은 개인 시험용이고, 상업 이용은 `.env` 의 `AZURE_SPEECH_KEY` (마이크로소프트 공식, 같은 목소리)로. Azure 연결은 아직 키가 없어 시험 못 함.
+- ✅ 영상 속 말소리 인식 (faster-whisper large-v3, `src/pipeline/speech.js` + `scripts/py/stt_whisper.py`): `D:\ProgramFiles\asr\.venv` 의 Python 을 자동으로 씀, GPU로 영상 15초 ≈ 15초. 받아쓴 말은 분석·대본 자료와 블로그 사실 카드(S1, S2…)로 들어감. 끄기: `.env` 의 `STT=off`.
+- `D:\ProgramFiles` 살펴본 결과, 다음에 연결할 후보: Real-ESRGAN(사진 선명하게, `realesrgan-ncnn-vulkan.exe`), EasyOCR(메뉴판 글자 읽기, 한국어 모델 있음), Qwen3-TTS·CosyVoice(내 PC 목소리, Apache 2.0). fish-speech 는 상업 이용 금지라 제외.
 - ⬜ 다음 할 일:
-  1. `D:\ProgramFiles` 안의 프로그램을 살펴보고 이 앱에 쓸 만한 것(글꼴, 음성, 영상 도구 등)을 추려 연결하기
+  1. 사진 선명하게(Real-ESRGAN) 연결
   2. 텔레그램 봇 연결 (`@BotFather` → 토큰을 `.env` 의 `TELEGRAM_BOT_TOKEN=` → 앱 켜고 `/start` → `TELEGRAM_CHAT_ID=`)
   3. 구글 드라이브 데스크톱 연결 (`DRIVE_DIR=`, `DRIVE_RESULT_URL=`)
   4. 실제 사진·영상으로 첫 제작, 텔레그램 승인·수정 흐름 시험
-- 앞으로: 플랫폼 자동 업로드, 영상 속 말소리 인식(faster-whisper)
+- 앞으로: 플랫폼 자동 업로드

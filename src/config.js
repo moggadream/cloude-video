@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,6 +14,12 @@ function ffprobeNextTo(ffmpegPath) {
   const dir = path.dirname(ffmpegPath);
   const ext = path.extname(ffmpegPath);
   return path.join(dir, `ffprobe${ext}`);
+}
+
+// 이 PC에 이미 설치된 프로그램 위치 (윈도우에서만 찾는다)
+function firstExisting(paths) {
+  if (process.platform !== 'win32') return '';
+  return paths.find((p) => fs.existsSync(p)) || '';
 }
 
 export const config = {
@@ -57,6 +64,14 @@ export const config = {
     voice: env('TTS_VOICE', 'ko-KR-SunHiNeural'),
     rate: env('TTS_RATE', '+8%'),
     python: env('PYTHON', process.platform === 'win32' ? 'python' : 'python3'),
+  },
+  // 영상 속 말소리 인식 (faster-whisper). STT=off 로 끌 수 있다
+  stt: {
+    mode: env('STT', 'auto'),
+    python: env('STT_PYTHON', '') || firstExisting(['D:\\ProgramFiles\\asr\\.venv\\Scripts\\python.exe']) || env('PYTHON', process.platform === 'win32' ? 'python' : 'python3'),
+    model: env('STT_MODEL', 'large-v3'),
+    modelDir: env('STT_MODEL_DIR', '') || firstExisting(['D:\\ProgramFiles\\asr\\models\\whisper']),
+    language: env('STT_LANGUAGE', 'ko'),
   },
   // 마이크로소프트 공식 음성(Azure AI Speech): 상업 이용 가능, 매달 무료 사용량 있음
   azure: {

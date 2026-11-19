@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { projectDir, getProject, updateProject } from '../store.js';
 import { prepareMedia } from './media.js';
+import { transcribeMedia } from './speech.js';
 import { makePlan, finalizePlan, reviseOutput, PLATFORMS, PLATFORM_KEYS, VIDEO_KEYS, allShots } from './plan.js';
 import { renderVideo, FORMATS, fmtClock } from './render.js';
 import { renderCarousel, renderThumbnail } from './carousel.js';
@@ -40,12 +41,15 @@ export async function processProject(id, opts = {}) {
       await setStep(id, `사진·영상 정리 중 (${i + 1}/${project.media.length})`, 0.02 + 0.08 * (i / project.media.length));
       media.push(await prepareMedia(m, dir));
     }
-    project = await updateProject(id, (p) => { p.media = media; });
+    // 1-1) 영상 속 말소리 받아쓰기 (실패해도 계속)
+    const heard = await transcribeMedia(media, dir, (step, r) => setStep(id, step, 0.1 + 0.04 * r).catch(() => {}))
+      .catch((err) => { console.warn('[stt] 건너뜀:', err.message); return media; });
+    project = await updateProject(id, (p) => { p.media = heard; });
 
     // 2) AI 분석 + 플랫폼별 대본 (opts.plan: 미리 써둔 계획을 쓸 때)
     let plan = opts.plan
       ? finalizePlan(structuredClone(opts.plan), project)
-      : await makePlan(project, dir, (step, r) => setStep(id, step, 0.1 + 0.24 * r).catch(() => {}));
+      : await makePlan(project, dir, (step, r) => setStep(id, step, 0.14 + 0.2 * r).catch(() => {}));
 
     // 2-1) 자체 검증: 규칙 검사 + AI 편집장 채점 → 기준 미달만 자동 보완
     if (!opts.plan && plan._source !== 'mock' && reviewEnabled() && (await aiBackend()) !== 'off') {

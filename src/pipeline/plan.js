@@ -4,6 +4,12 @@ import { z } from 'zod';
 import { generate, aiBackend } from '../ai/index.js';
 import { loadSkill, loadStyleSamples, recentFeedback } from '../ai/skills.js';
 import { smallJpegBase64 } from './media.js';
+import { speechText } from './speech.js';
+
+const SPEECH_NOTE = '## 영상 속 말소리 (자동 받아쓰기: 직원 설명·안내 방송·촬영자가 한 말)\n'
+  + '- 화면에 없는 정보(메뉴 설명, 가격, 영업시간, 추천)가 있으면 사실로 써도 된다. 누가 한 말인지 모르면 "직원분이 ~래요"처럼 단정하지 말고 "~라고 하더라고요"로.\n'
+  + '- 받아쓰기라 글자가 틀릴 수 있다. 화면·메모와 어긋나는 숫자(가격·시간)는 화면·메모를 믿고, 뜻이 안 통하는 문장은 쓰지 않는다.\n'
+  + '- 손님 대화·사적인 말(이름, 전화번호, 개인 이야기)은 옮기지 않는다.';
 import { CONCEPTS, CONCEPT_BY_ID } from '../guides/concepts.js';
 
 export const CATEGORIES = {
@@ -123,6 +129,13 @@ export function factCards(project, plan) {
   const memo = String(project.hints?.memo || '');
   memo.split(/(?<=[.!?。])\s+|\n+|,\s*(?=[가-힣])/).map((x) => x.trim()).filter((x) => x.length > 1)
     .forEach((x, i) => cards.push(`M${i + 1}. ${x}`));
+  // S = 영상 속 말소리 (직원 설명·안내 방송·촬영자가 한 말)
+  let k = 0;
+  for (const m of project.media || []) {
+    for (const s of m.speech?.segments || []) {
+      cards.push(`S${++k}. [${m.id} ${Math.floor(s.start / 60)}:${String(Math.floor(s.start % 60)).padStart(2, '0')}] "${s.text}"`);
+    }
+  }
   let n = 0;
   const add = (t) => { if (t && String(t).trim()) cards.push(`F${++n}. ${String(t).trim()}`); };
   (plan.key_facts || []).forEach(add);
@@ -149,8 +162,10 @@ export async function contextText(project, plan, key) {
     '- 핵심 사실:', ...plan.key_facts.map((f) => `  - ${f}`), '',
     '## 장면 목록 (ref | 위치 | 품질 | 보이는 것 | 상품·가격)', shotTable(plan, project),
   ];
+  const heard = speechText(project);
+  if (heard) parts.push('', SPEECH_NOTE, heard);
   if (key === 'blog' || key === 'factcheck') {
-    parts.push('', '## 사실 카드 (글의 모든 정보 문장은 이 카드에 근거해야 함. M=촬영자 메모: 감상·맛·경험은 M 카드에 있을 때만)', ...factCards(project, plan));
+    parts.push('', '## 사실 카드 (글의 모든 정보 문장은 이 카드에 근거해야 함. M=촬영자 메모: 감상·맛·경험은 M 카드에 있을 때만. S=영상 속 말소리 받아쓰기)', ...factCards(project, plan));
   }
   const style = await loadStyleSamples();
   if (style) parts.push('', '## 촬영자가 예전에 쓴 글 (이 말투와 표현을 닮게 쓴다. 내용은 베끼지 않는다)', style);
@@ -203,6 +218,8 @@ async function analyze(project, dir) {
     type: 'text',
     text: `## 촬영자 정보\n${hintText(project)}\n\n아래에 사진·영상 장면이 있습니다. 모든 ref에 대해 shots를 하나씩 작성하세요.`,
   }];
+  const heard = speechText(project);
+  if (heard) content.push({ type: 'text', text: `${SPEECH_NOTE}\n${heard}` });
   for (const s of allShots(project)) {
     const label = s.media.kind === 'video'
       ? `[${s.ref}] 영상 ${s.media.id}의 ${fmtTime(s.time)} 지점`
