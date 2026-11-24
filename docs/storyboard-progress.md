@@ -41,3 +41,9 @@
 - 화면 모음에서 본 문제: 한 장면에 컷이 여러 개인데 자막은 하나라 "뚝배기 계란찜 리필" 자막이 김치찌개 컷 위에도 뜸.
 - 고친 것: **컷별 자막(cut_captions)** — 컷이 바뀌면 그 컷에 보이는 것의 이름으로 자막이 바뀜 (인기 맛집 쇼츠처럼 한 컷에 한 정보). 시험 도구가 사용량 한도에 걸리면 초기화 시각까지 기다렸다가 다시.
 - 다음: `node scripts/run-test-sets.js cafe market restaurant` 그다음 `mart park amusement festival popup`.
+
+### 4회차 (2026-11-24) 카페·시장 + 오픈소스 조사 + 움직이는 글자
+- 카페: 스토리보드 100, 쇼츠 25.5초·평균 2.1초 ✅, 첫 컷 카페 전경 + 제목, 컷별 자막 잘 바뀜. 남은 문제: 초코 케이크 짧은 영상이 떨어진 자리에 3번.
+- 시장: 스토리보드 81 (4컷, 가까운 컷 25%). 원인은 **시험 자료**: 꼬치·전 굽는 영상이 해외 시장(중국어 간판)이라 분석 AI가 "장소와 관계없음"으로 정확히 뺌. → 한국 길거리 음식 가까이 영상으로 시장 자료 교체 필요.
+- 오픈소스 조사(`docs/research/open-source.md`) → Remotion 글자 층 + -14 LUFS 음량 적용 (`remotion/`, `src/pipeline/overlay.js`). 처음엔 글꼴이 안 먹은 줄 알았는데, 원본 크기로 비교하니 정상(작게 줄인 화면 때문에 착각).
+- 다음: 시장 자료 교체(`tests/media/manifest.json`) → `node scripts/run-test-sets.js market mart park amusement festival popup`.
