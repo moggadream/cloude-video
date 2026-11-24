@@ -111,7 +111,18 @@ export async function narrate(text, workDir, { rate = config.tts.rate } = {}) {
     else if (provider === 'azure') await azureTts(spoken, file, voice, rate);
     else await elevenTts(spoken, file);
   }
-  return { file, duration: await audioDuration(file) };
+  // 음성 파일 앞뒤의 무음 자르기 (edge 음성은 앞 0.2초·뒤 0.7초 정도가 비어 있어
+  // 장면 사이가 1초 넘게 끊기고 자막이 말보다 늦게 바뀌었다)
+  const trimmed = file.replace(/\.mp3$/, '_t.wav');
+  if (!(await exists(trimmed))) {
+    try {
+      const cut = 'silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.03';
+      await ffmpeg(['-i', file, '-af', `${cut},areverse,${cut},areverse`, '-c:a', 'pcm_s16le', trimmed]);
+    } catch { return { file, duration: await audioDuration(file) }; }
+  }
+  const duration = await audioDuration(trimmed);
+  if (!(duration > 0.2)) return { file, duration: await audioDuration(file) }; // 잘못 잘렸으면 원본
+  return { file: trimmed, duration };
 }
 
 /**

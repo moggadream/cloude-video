@@ -114,14 +114,23 @@ export async function renderVideo({ format, script, project, dir, musicPrompt, o
       `[m][v1]sidechaincompress=threshold=0.02:ratio=6:attack=30:release=500[duck];` +
       `[duck][v2]amix=inputs=2:duration=first:normalize=0,afade=t=out:st=${Math.max(0, total - 1.5)}:d=1.5,alimiter=limit=0.95,${LOUDNORM}[a]`
     : `[2:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=0.6,atrim=0:${total},afade=t=out:st=${Math.max(0, total - 1.5)}:d=1.5,${LOUDNORM}[a]`;
+  // 소리는 따로 먼저 만든다: 자막 입히기(subtitles)와 소리 섞기를 한 번에 하면
+  // 소리가 영상의 절반쯤에서 끊기는 문제가 있었다 (19.6초 영상에 소리 9.9초)
+  const mixFile = path.join(work, 'mix.m4a');
   await ffmpeg([
-    '-i', useOverlay ? overlaid : joined,
+    '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
     '-i', voiceTrack,
     '-stream_loop', '-1', '-i', music.file,
-    '-filter_complex', useOverlay ? audioFilter : `[0:v]${subs}[v];${audioFilter}`,
-    '-map', useOverlay ? '0:v' : '[v]', '-map', '[a]',
+    '-filter_complex', audioFilter,
+    '-map', '[a]', '-c:a', 'aac', '-b:a', '192k', '-t', String(total), mixFile,
+  ], { cwd: work });
+  await ffmpeg([
+    '-i', useOverlay ? overlaid : joined,
+    '-i', mixFile,
+    ...(useOverlay ? [] : ['-vf', subs]),
+    '-map', '0:v', '-map', '1:a',
     ...(useOverlay ? ['-c:v', 'copy'] : ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-pix_fmt', 'yuv420p']),
-    '-c:a', 'aac', '-b:a', '192k', '-t', String(total),
+    '-c:a', 'copy', '-t', String(total),
     '-movflags', '+faststart', outFile,
   ], { cwd: work });
   onProgress(0.95);
