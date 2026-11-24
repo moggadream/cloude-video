@@ -146,6 +146,11 @@ export function lintOutput(key, out, plan, project) {
       const chars = out.scenes.reduce((a, s) => a + String(s.narration || '').replace(/\s/g, '').length, 0);
       const est = chars / 6.5 + out.scenes.length * 0.25;
       if (est < minSec * 0.9) add('error', `영상이 너무 짧음 (나레이션 공백 빼고 ${chars}자 ≈ ${Math.round(est)}초, 기준 ${minSec}초 이상 → 나레이션을 ${Math.round((minSec - out.scenes.length * 0.25) * 6.5)}자 이상으로)`);
+      // 컷 수에 비해 나레이션이 길면 컷이 늘어져 인기 쇼츠(맛집 평균 컷 1.5~1.8초)보다 느려진다
+      const tpl = storyboardFor(plan.concept);
+      const cutsN = out.scenes.reduce((a, s) => a + 1 + (s.extra_shots || []).length, 0);
+      const target = Math.max(minSec, Math.min(tpl.totalSec[1], cutsN * ((tpl.cutSec[0] + tpl.cutSec[1]) / 2)));
+      if (est > target * 1.1) add(est > target * 1.2 ? 'error' : 'warn', `컷 ${cutsN}개에 나레이션이 길어 컷이 느려짐 (≈${Math.round(est)}초, 목표 ${Math.round(target)}초 → 나레이션을 공백 빼고 ${Math.round((target - out.scenes.length * 0.25) * 6.5)}자 안팎으로)`);
     }
     if (key !== 'longform' && plan.storyboard?.beats?.length) {
       const hi = storyboardFor(plan.concept).cutSec[1];

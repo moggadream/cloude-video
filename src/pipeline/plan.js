@@ -266,10 +266,19 @@ function shotInfoMap(plan, project) {
   return new Map((plan.shots || []).map((s) => [s.ref, { framing: s.framing, quality: s.quality, time: time.get(s.ref) ?? 0 }]));
 }
 
+/** 세로 숏폼 목표 길이(초): 스토리보드 컷 수 × 컨셉 기준 한 컷 길이(가운데 값), 기준 최소 길이 이상 */
+export function targetSeconds(plan) {
+  const tpl = storyboardFor(plan.concept);
+  const cuts = (plan.storyboard?.beats || []).reduce((a, b) => a + (b.shots?.length || 0), 0);
+  const ideal = (tpl.cutSec[0] + tpl.cutSec[1]) / 2;
+  return Math.max(tpl.totalSec[0], Math.min(tpl.totalSec[1], cuts * ideal));
+}
+
 /** 대본 작성 때 보여줄 스토리보드 */
 function storyboardText(plan, key) {
   const sb = plan.storyboard;
-  const sbTotal = sb.beats.reduce((a, b) => a + (Number(b.sec) || 0), 0);
+  // 목표 길이 = 컷 수 × 기준 한 컷 길이 (컷이 적은데 말을 길게 하면 컷이 늘어져 인기 쇼츠보다 느려진다)
+  const sbTotal = targetSeconds(plan);
   const lines = [
     `## 스토리보드 (점수 ${sb.score}/100, 인기 쇼츠 기준과 비교해 통과한 컷 구성)`,
     `- 첫 컷 제목: ${String(sb.hook_title || '').replace(/\n/g, ' / ')}`,
@@ -592,6 +601,25 @@ const TAG_MAX = { shorts: 5, reels: 5, tiktok: 5, longform: 5, carousel: 5, blog
 // 짧은 영상은 처음부터, 긴 영상은 그 장면 직전부터
 const clipStartOf = (s) => (s.media.kind === 'video' && s.media.frames.length > 3 ? Math.max(0, Math.round((s.time - 0.3) * 10) / 10) : 0);
 
+/**
+ * 컷 구성은 스토리보드가 정한다: 대본(장면)이 스토리보드 비트의 컷을 빠뜨리면 그 장면의 extra_shots 로 되돌려 넣는다.
+ * (대본을 쓰는 AI 는 나레이션·자막만 쓰고, 컷을 줄이면 영상이 인기 쇼츠보다 느려진다)
+ */
+export function enforceStoryboard(sb, cur) {
+  if (!sb?.beats?.length || !cur?.scenes?.length) return;
+  const refOf = (x) => (typeof x === 'string' ? x : x?.shot || '');
+  const used = new Set(cur.scenes.flatMap((s) => [refOf(s.shot), ...(s.extra_shots || []).map(refOf)]));
+  for (const sc of cur.scenes) {
+    const mine = [refOf(sc.shot), ...(sc.extra_shots || []).map(refOf)];
+    const beat = sb.beats.find((b) => b.shots.some((r) => mine.includes(r)));
+    if (!beat) continue;
+    const add = beat.shots.filter((r) => !used.has(r));
+    if (!add.length) continue;
+    sc.extra_shots = [...(sc.extra_shots || []), ...add];
+    add.forEach((r) => used.add(r));
+  }
+}
+
 export function finalizePlan(plan, project, only = null) {
   const shots = allShots(project);
   const byRef = new Map(shots.map((s) => [s.ref, s]));
@@ -611,6 +639,7 @@ export function finalizePlan(plan, project, only = null) {
     const cur = plan[k];
     if (!cur) continue;
     if (p.type === 'video') {
+      if (STORYBOARD_KEYS.includes(k)) enforceStoryboard(plan.storyboard, cur);
       let scenes = (cur.scenes || []).map((sc) => {
         if (sc.media_id && !sc.shot) return sc; // 이미 변환된 장면
         const s = resolve(sc.shot);
