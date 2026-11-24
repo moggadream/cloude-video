@@ -25,6 +25,8 @@
 - ✅ 나레이션 목소리 4종(선희·인준·현수·비비엔) 선택 기능: 텔레그램 `/voice` (`src/voices.js`). 무료 edge 음성은 개인 시험용이고, 상업 이용은 `.env` 의 `AZURE_SPEECH_KEY` (마이크로소프트 공식, 같은 목소리)로. Azure 연결은 아직 키가 없어 시험 못 함.
 - ✅ 영상 속 말소리 인식 (faster-whisper large-v3, `src/pipeline/speech.js` + `scripts/py/stt_whisper.py`): `D:\ProgramFiles\asr\.venv` 의 Python 을 자동으로 씀, GPU로 영상 15초 ≈ 15초. 받아쓴 말은 분석·대본 자료와 블로그 사실 카드(S1, S2…)로 들어감. 끄기: `.env` 의 `STT=off`.
 - ✅ 작은 사진 선명하게 (Real-ESRGAN x4plus, `src/pipeline/upscale.js`, `media.js` 의 사진 정리 단계): 짧은 쪽 < 1080px 사진만, 사진당 ~5초. 실제 사진이 플라스틱처럼 매끈해지고 이음새 줄이 생기는 문제가 있어 원본 질감과 섞음(`UPSCALE_MIX=0.55`). 끄기: `UPSCALE=off`.
+- ✅ 스토리보드 먼저 (2026-11-20~24): 인기 쇼츠 분석(`docs/research/storyboards.md`) → 컨셉별 기준(`src/guides/storyboards.js`) → 스토리보드 점수·규칙 검사 → 컷별 자막·번호 이름표·화면 꽉 채우기. 시험 자료 `tests/media/` (Pexels), 진행 일지 `docs/storyboard-progress.md` (멈췄다 다시 시작할 때 여기부터).
+- ✅ 움직이는 화면 글자: Remotion 4.0.542 (`remotion/`, 개인·3명 이하 무료) + 음량 -14 LUFS. 없거나 실패하면 예전 ASS 자막. 끄기 `OVERLAY=ass`.
 - `D:\ProgramFiles` 살펴본 결과, 다음에 연결할 후보: EasyOCR(메뉴판 글자 읽기, 한국어 모델 있음), Qwen3-TTS·CosyVoice(내 PC 목소리, Apache 2.0). fish-speech 는 상업 이용 금지라 제외.
 - ⬜ 다음 할 일:
   1. 텔레그램 봇 연결 (`@BotFather` → 토큰을 `.env` 의 `TELEGRAM_BOT_TOKEN=` → 앱 켜고 `/start` → `TELEGRAM_CHAT_ID=`)
