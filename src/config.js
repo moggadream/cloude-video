@@ -63,6 +63,8 @@ export const config = {
     // / 현수 ko-KR-HyunsuMultilingualNeural / 비비엔 fr-FR-VivienneMultilingualNeural
     voice: env('TTS_VOICE', 'ko-KR-SunHiNeural'),
     rate: env('TTS_RATE', '+8%'),
+    // 세로 숏폼은 더 빠르게 (인기 리뷰 쇼츠는 1초에 4~6.5자)
+    shortRate: env('TTS_RATE_SHORT', '+18%'),
     python: env('PYTHON', process.platform === 'win32' ? 'python' : 'python3'),
   },
   // 영상 속 말소리 인식 (faster-whisper). STT=off 로 끌 수 있다

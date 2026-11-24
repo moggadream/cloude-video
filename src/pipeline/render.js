@@ -8,10 +8,10 @@ import { narrate, makeMusic } from './audio.js';
 import { renderOverlay } from './overlay.js';
 
 export const FORMATS = {
-  shorts: { label: '유튜브 쇼츠', w: 1080, h: 1920, maxTotal: 59, minScene: 2.2, maxScene: 7, captionMargin: 420 },
-  reels: { label: '인스타그램 릴스', w: 1080, h: 1920, maxTotal: 90, minScene: 2.0, maxScene: 6, captionMargin: 460 },
+  shorts: { label: '유튜브 쇼츠', w: 1080, h: 1920, maxTotal: 59, minScene: 1.6, maxScene: 7, captionMargin: 420, short: true },
+  reels: { label: '인스타그램 릴스', w: 1080, h: 1920, maxTotal: 90, minScene: 1.5, maxScene: 6, captionMargin: 460, short: true },
   // 틱톡은 오른쪽 버튼·아래쪽 캡션이 화면을 가려서 글자를 더 안쪽·위쪽에 둔다
-  tiktok: { label: '틱톡', w: 1080, h: 1920, maxTotal: 90, minScene: 2.0, maxScene: 6, captionMargin: 600, marginL: 70, marginR: 190 },
+  tiktok: { label: '틱톡', w: 1080, h: 1920, maxTotal: 90, minScene: 1.5, maxScene: 6, short: true, captionMargin: 600, marginL: 70, marginR: 190 },
   longform: { label: '유튜브 롱폼', w: 1920, h: 1080, maxTotal: 1800, minScene: 3.5, maxScene: 20, captionMargin: 90 },
 };
 
@@ -20,6 +20,10 @@ const FPS = 30;
 const LOUDNORM = 'loudnorm=I=-14:TP=-1.5:LRA=11,aresample=44100';
 const VOICE_LEAD = 0.25; // 장면 시작 후 나레이션이 시작되기까지
 const VOICE_TAIL = 0.45; // 나레이션이 끝난 뒤 여유
+// 세로 숏폼: 인기 리뷰 쇼츠는 장면 사이에 쉬지 않고 말한다 (docs/evals/2026-11-24-reference-shorts.md)
+const SHORT_LEAD = 0.08;
+const SHORT_TAIL = 0.15;
+const leadOf = (fmt) => (fmt.short ? SHORT_LEAD : VOICE_LEAD);
 
 /** 음성이 없을 때 읽는 속도로 장면 길이를 추정 (한국어 초당 약 6자) */
 const estimateSeconds = (text) => (text ? text.replace(/\s/g, '').length / 6 + 0.9 : 0);
@@ -46,9 +50,9 @@ export async function renderVideo({ format, script, project, dir, musicPrompt, o
   for (const s of script.scenes) {
     const m = mediaById.get(s.media_id);
     if (!m) continue;
-    const voice = await narrate(s.narration, path.join(dir, 'work'));
+    const voice = await narrate(s.narration, path.join(dir, 'work'), fmt.short ? { rate: config.tts.shortRate } : undefined);
     let dur = voice
-      ? voice.duration + VOICE_LEAD + VOICE_TAIL
+      ? voice.duration + leadOf(fmt) + (fmt.short ? SHORT_TAIL : VOICE_TAIL)
       : Math.max(estimateSeconds(s.narration), estimateSeconds(s.caption));
     if (!dur) dur = m.kind === 'video' ? Math.min(4, m.duration - s.clip_start) : 3;
     dur = Math.min(Math.max(dur, fmt.minScene), voice ? Infinity : fmt.maxScene);
@@ -57,7 +61,7 @@ export async function renderVideo({ format, script, project, dir, musicPrompt, o
       else break;
     }
     dur = Math.round(dur * FPS) / FPS;
-    scenes.push({ ...s, media: m, voice, start: total, duration: dur });
+    scenes.push({ ...s, media: m, voice, lead: leadOf(fmt), start: total, duration: dur });
     total += dur;
   }
   if (scenes.length === 0) throw new Error(`${fmt.label}: 사용할 장면이 없습니다`);
@@ -339,7 +343,7 @@ async function buildVoiceTrack(scenes, work) {
   for (const [i, sc] of scenes.entries()) {
     const part = path.join(work, `voice_${String(i).padStart(3, '0')}.wav`);
     if (sc.voice) {
-      const ms = Math.round(VOICE_LEAD * 1000);
+      const ms = Math.round((sc.lead ?? VOICE_LEAD) * 1000);
       await ffmpeg([
         '-i', sc.voice.file,
         '-af', `aformat=sample_rates=44100:channel_layouts=stereo,adelay=${ms}|${ms},apad`,
@@ -395,7 +399,7 @@ export function overlayEvents(scenes, script, format, cuts = []) {
     // docs/evals/2026-11-24-reference-shorts.md). 나레이션이 없는 장면만 컷 이름·장면 자막을 쓴다.
     const speech = format !== 'longform' && sc.voice ? speechChunks(sc.narration) : [];
     if (speech.length) {
-      const vs = s + VOICE_LEAD;
+      const vs = s + (sc.lead ?? VOICE_LEAD);
       const ve = Math.min(e - 0.05, vs + sc.voice.duration);
       const totalChars = speech.reduce((a, c) => a + c.replace(/\s/g, '').length, 0) || 1;
       let t = vs;

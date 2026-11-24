@@ -44,11 +44,11 @@ export async function ttsProvider() {
 
 const xmlEscape = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 
-async function azureTts(text, out, voice) {
+async function azureTts(text, out, voice, rate = config.tts.rate) {
   // 다국어 목소리(비비엔 등)도 한국어로 읽도록 <lang> 으로 지정
   const multi = /Multilingual/.test(voice);
   const body = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="ko-KR"><voice name="${voice}">`
-    + `<prosody rate="${config.tts.rate}">${multi ? `<lang xml:lang="ko-KR">${xmlEscape(text)}</lang>` : xmlEscape(text)}</prosody></voice></speak>`;
+    + `<prosody rate="${rate}">${multi ? `<lang xml:lang="ko-KR">${xmlEscape(text)}</lang>` : xmlEscape(text)}</prosody></voice></speak>`;
   const res = await fetch(`https://${config.azure.region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
     method: 'POST',
     headers: {
@@ -63,9 +63,9 @@ async function azureTts(text, out, voice) {
   await fs.writeFile(out, Buffer.from(await res.arrayBuffer()));
 }
 
-function edgeTts(text, out, voice) {
+function edgeTts(text, out, voice, rate = config.tts.rate) {
   return new Promise((resolve, reject) => {
-    const p = spawn(config.tts.python, [path.join(ROOT, 'scripts', 'py', 'tts_edge.py'), voice, config.tts.rate, out],
+    const p = spawn(config.tts.python, [path.join(ROOT, 'scripts', 'py', 'tts_edge.py'), voice, rate, out],
       { windowsHide: true, env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' } });
     let err = '';
     p.stderr.on('data', (d) => { err += d; });
@@ -97,18 +97,18 @@ async function elevenTts(text, out) {
  * 문장을 음성 파일로 만든다. 같은 문장은 캐시를 재사용한다.
  * 음성을 만들 수 없으면 null (자막만 나오는 영상이 된다).
  */
-export async function narrate(text, workDir) {
+export async function narrate(text, workDir, { rate = config.tts.rate } = {}) {
   const provider = await ttsProvider();
   if (!provider || !String(text || '').trim()) return null;
   const voice = currentVoice();
-  const key = provider === 'elevenlabs' ? `el|${config.elevenlabs.voiceId}|${config.elevenlabs.ttsModel}` : `${provider}|${voice}|${config.tts.rate}`;
+  const key = provider === 'elevenlabs' ? `el|${config.elevenlabs.voiceId}|${config.elevenlabs.ttsModel}` : `${provider}|${voice}|${rate}`;
   const hash = crypto.createHash('sha1').update(`${key}|${text}`).digest('hex').slice(0, 16);
   const file = path.join(workDir, `tts_${hash}.mp3`);
   if (!(await exists(file))) {
     // 화면용 기호는 읽지 않게 정리 (이모지, ·, / 등)
     const spoken = String(text).replace(/[\p{Extended_Pictographic}\u{FE0F}]/gu, '').replace(/[·|]/g, ', ').replace(/\s+/g, ' ').trim();
-    if (provider === 'edge') await edgeTts(spoken, file, voice);
-    else if (provider === 'azure') await azureTts(spoken, file, voice);
+    if (provider === 'edge') await edgeTts(spoken, file, voice, rate);
+    else if (provider === 'azure') await azureTts(spoken, file, voice, rate);
     else await elevenTts(spoken, file);
   }
   return { file, duration: await audioDuration(file) };
