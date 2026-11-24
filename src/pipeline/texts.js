@@ -15,7 +15,21 @@ export function blogMarkdown(blog) {
   for (const s of blog.sections) {
     if (s.shot) out.push(`[사진: ${s.shot}]`);
     if (s.heading) out.push(`## ${s.heading}`);
-    out.push(s.body.trim(), '');
+    // 인기 블로그처럼 사진 → 짧은 글 → 사진 → 짧은 글: 더 넣을 사진을 문단 사이에 고르게
+    const extra = (s.extra_shots || []).filter(Boolean);
+    const paras = s.body.trim().split(/\n\s*\n/).filter(Boolean);
+    if (!extra.length || paras.length < 2) {
+      out.push(s.body.trim(), '');
+      for (const x of extra) out.push(`[사진: ${x}]`, '');
+      continue;
+    }
+    const every = paras.length / (extra.length + 1);
+    let next = 0;
+    paras.forEach((p, i) => {
+      out.push(p, '');
+      if (next < extra.length && i + 1 >= Math.round(every * (next + 1)) && i < paras.length - 1) out.push(`[사진: ${extra[next++]}]`, '');
+    });
+    while (next < extra.length) out.push(`[사진: ${extra[next++]}]`, '');
   }
   if (blog.hashtags?.length) out.push(tagLine(blog.hashtags));
   return out.join('\n').trim();

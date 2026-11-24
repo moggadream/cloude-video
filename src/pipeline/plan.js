@@ -98,7 +98,8 @@ const BlogOut = z.object({
   sections: z.array(z.object({
     heading: z.string(),
     body: z.string(),
-    shot: z.string().describe('없으면 빈 문자열'),
+    shot: z.string().describe('섹션 대표 사진 ref. 없으면 빈 문자열'),
+    extra_shots: z.array(z.string()).describe('같은 섹션에 더 넣을 사진 ref 0~3개 (문단 사이에 들어감). 대표 사진·다른 섹션과 겹치지 않게'),
     facts: z.array(z.string()).describe('이 섹션 본문이 근거로 쓴 사실 카드 번호 (예: ["F3","M2"])'),
   })),
   hashtags: z.array(z.string()),
@@ -443,7 +444,7 @@ export function toShotForm(key, plan, project) {
     return { ...cur, scenes: cur.scenes.map((s) => ({ shot: s.shot || nearestShot(project, s.media_id, s.clip_start), extra_shots: (s.extra_shots || []).map((x) => x.shot || x), cut_captions: (s.extra_shots || []).length ? [s.cut_caption || '', ...(s.extra_shots || []).map((x) => x.caption || '')] : [], label: s.label || '', narration: s.narration, caption: s.caption, price_tag: s.price_tag, chapter: s.chapter })) };
   }
   if (type === 'carousel') return { slides: cur.slides.map(({ shot, headline, body }) => ({ shot, headline, body })), caption: cur.caption, hashtags: cur.hashtags };
-  if (type === 'blog') return { title: cur.title, sections: cur.sections.map((s) => ({ heading: s.heading, body: s.body, shot: s.shot || s.media_id || '' })), hashtags: cur.hashtags };
+  if (type === 'blog') return { title: cur.title, sections: cur.sections.map((s) => ({ heading: s.heading, body: s.body, shot: s.shot || s.media_id || '', extra_shots: s.extra_shots || [] })), hashtags: cur.hashtags };
   return cur;
 }
 
@@ -650,6 +651,7 @@ export function finalizePlan(plan, project, only = null) {
           // 문단 앞 공백·빈 줄 정리
           body: String(sec.body || '').split('\n').map((l) => l.trim()).join('\n').replace(/\n{3,}/g, '\n\n').trim(),
           shot: s ? s.ref : '',
+          extra_shots: [...new Set((Array.isArray(sec.extra_shots) ? sec.extra_shots : []).map((x) => resolve(x)?.ref).filter((r) => r && r !== s?.ref))].slice(0, 4),
           facts: Array.isArray(sec.facts) ? sec.facts.slice(0, 20) : [],
         };
       });

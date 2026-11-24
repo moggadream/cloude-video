@@ -180,12 +180,18 @@ export function lintOutput(key, out, plan, project) {
     if (/(영상으로 담|사진에도 .{0,6}찍혀|영상만 봐도|사진만 봐도|사진 한 장에)/.test(body)) add('warn', '촬영 과정 이야기("영상으로 담았죠" 등) — 보이는 것을 쓰기');
     const k = out.sections.length;
     if (k < L.sections[0] || k > L.sections[1]) add('warn', `섹션 ${k}개 (권장 ${L.sections[0]}~${L.sections[1]}개)`);
-    const photos = out.sections.filter((s) => s.shot).length;
-    if (photos < 4) add('warn', `사진 ${photos}장 (4장 이상 권장)`);
+    // 인기 블로그는 사진 11~41장 (보통 20장 안팎, 사진 1장당 글 75~125자). 쓸 만한 장면은 사진으로도 거의 다 쓴다
+    const photos = out.sections.reduce((a, s) => a + (s.shot ? 1 : 0) + (s.extra_shots || []).length, 0);
+    const wantPhotos = Math.max(4, Math.round(Math.min(usable, 12) * 0.7));
+    if (photos < wantPhotos) add('warn', `사진 ${photos}장 (쓸 만한 장면 ${usable}개 → ${wantPhotos}장 이상 권장, 섹션마다 extra_shots 로 더 넣기)`);
+    // 인기 블로그는 한 줄이 짧다 (평균 12~14자, 줄의 80~90%가 22자 이하): 모바일에서 한 줄 = 한 문장
+    const lines = body.split('\n').map((l) => l.trim()).filter(Boolean);
+    const longLines = lines.filter((l) => l.length > 45).length;
+    if (lines.length && longLines / lines.length > 0.35) add('warn', `긴 줄이 많음 (45자 넘는 줄 ${longLines}/${lines.length}). 한 줄에 한 문장, 긴 문장은 쉼표에서 줄바꿈`);
     if (!/(아쉬|단점|불편|웨이팅|대기|주의|다만|흠)/.test(body)) add('warn', '아쉬운 점이 없음 (신뢰도)');
     if (!/(📍|위치|주소|⏰|영업|운영|주차|🚗)/.test(body)) add('warn', '방문 정보(위치·시간·주차)가 없음');
     if (/위 사진은|아래 사진은|사진에서 보시는/.test(body)) add('warn', '사진 설명체("위 사진은")');
-    if (out.title.length > 35) add('warn', `제목 ${out.title.length}자 (32자 이내 권장)`);
+    if (out.title.length > 45) add('warn', `제목 ${out.title.length}자 (40자 안팎 권장, 앞 25자에 검색어)`);
   }
 
   const score = Math.max(0, 100 - issues.reduce((a, i) => a + (i.level === 'error' ? 25 : 8), 0));
