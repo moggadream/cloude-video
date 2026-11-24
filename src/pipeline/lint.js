@@ -137,7 +137,7 @@ export function lintOutput(key, out, plan, project) {
           if (cuts[i].split(':')[0] === cuts[j].split(':')[0] && (cuts[i] === cuts[j] || (a !== undefined && b !== undefined && Math.abs(a - b) < 8))) near.push(`${cuts[i]}~${cuts[j]}`);
         }
       }
-      if (near.length) add(near.length >= 2 ? 'error' : 'warn', `같은 화면이 반복되는 컷: ${near.slice(0, 4).join(', ')} (같은 영상 8초 안쪽). 영상 하나에서 한 컷만 쓴다`);
+      if (near.length) add('error', `같은 화면이 반복되는 컷: ${near.slice(0, 4).join(', ')} (같은 영상 8초 안쪽). 영상 하나에서 한 컷만 쓴다`);
     }
     // 스토리보드 컷 길이: 나레이션이 길면 컷이 늘어져 기준(인기 쇼츠)보다 느려진다 → 오류로 보고 자동 보완
     // 스토리보드 기준 길이보다 짧은 영상 (나레이션이 너무 짧음) → 오류로 보고 자동 보완

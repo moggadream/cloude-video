@@ -608,6 +608,17 @@ const clipStartOf = (s) => (s.media.kind === 'video' && s.media.frames.length > 
 export function enforceStoryboard(sb, cur) {
   if (!sb?.beats?.length || !cur?.scenes?.length) return;
   const refOf = (x) => (typeof x === 'string' ? x : x?.shot || '');
+  // 대본이 스토리보드에 없는 컷을 extra_shots 에 더했으면 뺀다 (같은 화면 반복·기준 밖 컷 방지)
+  const inBoard = new Set(sb.beats.flatMap((b) => b.shots));
+  for (const sc of cur.scenes) {
+    if (Array.isArray(sc.extra_shots)) sc.extra_shots = sc.extra_shots.filter((x) => inBoard.has(refOf(x)));
+    // 장면 첫 컷이 스토리보드 밖이면, 뒤따르는 스토리보드 컷을 첫 컷으로 올린다
+    if (!inBoard.has(refOf(sc.shot)) && sc.extra_shots?.length) {
+      const next = sc.extra_shots.shift();
+      sc.shot = typeof next === 'string' ? next : next.shot;
+      if (typeof next === 'object') Object.assign(sc, { media_id: next.media_id, clip_start: next.clip_start });
+    }
+  }
   const used = new Set(cur.scenes.flatMap((s) => [refOf(s.shot), ...(s.extra_shots || []).map(refOf)]));
   for (const sc of cur.scenes) {
     const mine = [refOf(sc.shot), ...(sc.extra_shots || []).map(refOf)];
