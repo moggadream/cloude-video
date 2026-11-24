@@ -71,6 +71,7 @@ const SceneOut = z.object({
   shot: z.string().describe("장면 목록의 ref (예: 'm1:f5', 'm3')"),
   extra_shots: z.array(z.string()).describe('같은 나레이션 동안 이어서 보여줄 장면 ref (스토리보드의 나머지 컷). 없으면 빈 배열'),
   label: z.string().describe('화면 위쪽 번호 이름표 (스토리보드의 label). 없으면 빈 문자열'),
+  cut_captions: z.array(z.string()).describe('컷이 2개 이상인 장면만: 컷마다 화면에 뜰 짧은 이름 (shot, extra_shots 순서, 각 10자 안팎, 그 컷에 보이는 것). 컷 1개면 빈 배열'),
   narration: z.string(),
   caption: z.string(),
   price_tag: z.string().describe('확인된 가격만. 없으면 빈 문자열'),
@@ -278,6 +279,7 @@ function storyboardText(plan, key) {
     '- 나레이션 길이는 비트 길이에 맞춘다 (1초에 약 5자). 컷이 빠른 비트는 나레이션도 짧게. 컷이 1개인 장면은 나레이션 12자 안팎.',
     '- 스토리보드에 없는 컷을 더하지 않는다. 특히 같은 영상의 다른 장면(m3:f0과 m3:f1)은 거의 같은 화면이라 한 영상에서 한 컷만.',
     '- label 은 스토리보드의 이름표를 그대로. 이름표가 없는 비트는 빈칸.',
+    '- 컷이 2개 이상인 장면은 cut_captions 에 컷마다 그 컷에 보이는 것의 짧은 이름(메뉴·상품·장소, 10자 안팎)을 적는다. 인기 쇼츠는 컷이 바뀌면 이름도 바뀐다 (한 컷에 한 정보). 이때 caption 은 비워도 된다.',
   ];
   if (key !== 'shorts') lines.push('- 쇼츠와 같은 스토리보드를 쓰되, 첫 컷은 hook 비트의 다른 후보로 바꾸거나 비트 안의 컷 순서를 바꿔 겹치지 않게 해도 된다. 비트 순서는 지킨다.');
   return lines.join('\n');
@@ -438,7 +440,7 @@ export function toShotForm(key, plan, project) {
   const cur = plan[key];
   const type = PLATFORMS[key].type;
   if (type === 'video') {
-    return { ...cur, scenes: cur.scenes.map((s) => ({ shot: s.shot || nearestShot(project, s.media_id, s.clip_start), extra_shots: (s.extra_shots || []).map((x) => x.shot || x), label: s.label || '', narration: s.narration, caption: s.caption, price_tag: s.price_tag, chapter: s.chapter })) };
+    return { ...cur, scenes: cur.scenes.map((s) => ({ shot: s.shot || nearestShot(project, s.media_id, s.clip_start), extra_shots: (s.extra_shots || []).map((x) => x.shot || x), cut_captions: (s.extra_shots || []).length ? [s.cut_caption || '', ...(s.extra_shots || []).map((x) => x.caption || '')] : [], label: s.label || '', narration: s.narration, caption: s.caption, price_tag: s.price_tag, chapter: s.chapter })) };
   }
   if (type === 'carousel') return { slides: cur.slides.map(({ shot, headline, body }) => ({ shot, headline, body })), caption: cur.caption, hashtags: cur.hashtags };
   if (type === 'blog') return { title: cur.title, sections: cur.sections.map((s) => ({ heading: s.heading, body: s.body, shot: s.shot || s.media_id || '' })), hashtags: cur.hashtags };
@@ -605,17 +607,20 @@ export function finalizePlan(plan, project, only = null) {
         const s = resolve(sc.shot);
         if (!s) return null;
         // 같은 나레이션 동안 이어서 보여줄 컷 (스토리보드의 빠른 컷)
+        // cut_captions: [첫 컷, extra_shots...] 순서의 컷별 짧은 이름 (컷이 바뀌면 자막도 바뀜)
+        const caps = Array.isArray(sc.cut_captions) ? sc.cut_captions.map((c) => String(c || '').trim()) : [];
         const extras = [];
-        for (const x of Array.isArray(sc.extra_shots) ? sc.extra_shots : []) {
+        for (const [k, x] of (Array.isArray(sc.extra_shots) ? sc.extra_shots : []).entries()) {
           if (x && typeof x === 'object' && x.media_id) { extras.push(x); continue; } // 이미 변환됨
           const e = resolve(x);
-          if (e && e.ref !== s.ref && !extras.some((y) => y.shot === e.ref)) extras.push({ shot: e.ref, media_id: e.media.id, clip_start: clipStartOf(e) });
+          if (e && e.ref !== s.ref && !extras.some((y) => y.shot === e.ref)) extras.push({ shot: e.ref, media_id: e.media.id, clip_start: clipStartOf(e), caption: caps[k + 1] || '' });
         }
         return {
           shot: s.ref,
           media_id: s.media.id,
           clip_start: clipStartOf(s),
           extra_shots: extras.slice(0, 6),
+          cut_caption: sc.cut_caption ?? (extras.length ? caps[0] || '' : ''),
           label: String(sc.label || '').trim(),
           narration: String(sc.narration || '').trim(),
           caption: String(sc.caption || '').trim(),

@@ -20,14 +20,38 @@ function run(args, env = {}) {
   });
 }
 
+/** "resets 6:50am (Asia/Seoul)" → 그 시각까지 남은 ms (못 읽으면 30분) */
+function msUntilReset(text) {
+  const m = String(text).match(/resets\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+  if (!m) return 30 * 60_000;
+  let h = Number(m[1]) % 12;
+  if ((m[3] || '').toLowerCase() === 'pm') h += 12;
+  if (!m[3] && Number(m[1]) === 12) h = 12;
+  const t = new Date();
+  t.setHours(h, Number(m[2] || 0), 0, 0);
+  if (t <= new Date()) t.setDate(t.getDate() + 1);
+  return t - new Date() + 2 * 60_000; // 2분 여유
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 const log = path.join(ROOT, 'data', 'test-runs.log');
 for (const c of concepts) {
   const set = manifest.sets[c];
   if (!set) { console.log(`${c}: 목록에 없음`); continue; }
   const t0 = Date.now();
-  const r = await run([path.join('scripts', 'test-pipeline.js')], {
-    SAMPLE_DIR: path.join('tests', 'media', c), CONCEPT: c, PLACE: set.place.replace(/\s*\(.*\)$/, ''), MEMO: set.memo,
-  });
+  let r;
+  // 사용량 한도에 걸리면 초기화 시각까지 기다렸다가 같은 컨셉을 다시 (최대 3번)
+  for (let attempt = 0; attempt < 3; attempt++) {
+    r = await run([path.join('scripts', 'test-pipeline.js')], {
+      SAMPLE_DIR: path.join('tests', 'media', c), CONCEPT: c, PLACE: set.place.replace(/\s*\(.*\)$/, ''), MEMO: set.memo,
+    });
+    if (!/hit your .*limit|usage limit/i.test(r.out)) break;
+    const wait = msUntilReset(r.out);
+    const msg = `[${c}] 사용량 한도 → ${Math.round(wait / 60000)}분 기다렸다가 다시 (${new Date(Date.now() + wait).toLocaleTimeString('ko-KR')})`;
+    console.log(msg);
+    await fs.appendFile(log, `\n${msg}`);
+    await sleep(wait);
+  }
   const id = (r.out.match(/projects[\\/]([^\\/\s]+)[\\/]out/) || [])[1];
   const sbLines = r.out.split('\n').filter((l) => /\[storyboard\]|상태:|실패/.test(l)).join('\n');
   let sheet = '';

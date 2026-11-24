@@ -89,7 +89,7 @@ export async function renderVideo({ format, script, project, dir, musicPrompt, o
 
   // 6) 자막 파일
   const assFile = path.join(work, 'subs.ass');
-  await fs.writeFile(assFile, buildAss(scenes, script, fmt, format));
+  await fs.writeFile(assFile, buildAss(scenes, script, fmt, format, cuts));
 
   // 7) 최종 합성: 자막 입히기 + 나레이션 + 배경음악(나레이션 나올 때 자동으로 작아짐)
   const outFile = path.join(dir, 'out', `${format}.mp4`);
@@ -146,10 +146,10 @@ const MIN_CUT = 0.9; // 컷 하나의 최소 길이(초)
 export function splitCuts(scenes, mediaById) {
   const cuts = [];
   for (const sc of scenes) {
-    let list = [{ shot: sc.shot, media: sc.media, clip_start: sc.clip_start }];
+    let list = [{ shot: sc.shot, media: sc.media, clip_start: sc.clip_start, caption: sc.cut_caption || '' }];
     for (const x of sc.extra_shots || []) {
       const m = mediaById.get(x.media_id);
-      if (m) list.push({ shot: x.shot, media: m, clip_start: x.clip_start || 0 });
+      if (m) list.push({ shot: x.shot, media: m, clip_start: x.clip_start || 0, caption: x.caption || '' });
     }
     // 같은 자료(영상)의 컷이 연달아 오면 한 컷처럼 보이므로 번갈아 놓는다 (장면 첫 컷은 그대로)
     list = interleave(list, cuts.at(-1)?.media.id);
@@ -158,7 +158,7 @@ export function splitCuts(scenes, mediaById) {
     let used = 0;
     for (let i = 0; i < n; i++) {
       const f = i === n - 1 ? totalFrames - used : Math.round(totalFrames / n);
-      cuts.push({ ...list[i], start: sc.start + used / FPS, duration: f / FPS });
+      cuts.push({ ...list[i], scene: sc, start: sc.start + used / FPS, duration: f / FPS });
       used += f;
     }
   }
@@ -369,7 +369,7 @@ export const assText = (s) => String(s)
   .trim()
   .replace(/\\/g, '＼').replace(/[{}]/g, '').replace(/\r?\n/g, '\\N');
 
-function buildAss(scenes, script, fmt, format) {
+function buildAss(scenes, script, fmt, format, cuts = []) {
   const vertical = fmt.h > fmt.w;
   const base = vertical ? 1080 : 1080; // 글자 크기 기준 (짧은 변)
   const capSize = Math.round(base * (vertical ? 0.068 : 0.055));
@@ -415,7 +415,11 @@ function buildAss(scenes, script, fmt, format) {
     const e = sc.start + sc.duration;
     // 이름표: 첫 장면은 큰 제목(훅)과 겹치니 뺀다
     if (sc.label && !(i === 0 && script.hook)) ev.push(`Dialogue: 2,${assTime(s + 0.05)},${assTime(e - 0.05)},Label,,0,0,0,,{\\fad(80,80)}${assText(sc.label)}`);
-    if (sc.caption) ev.push(`Dialogue: 1,${assTime(s + 0.1)},${assTime(e - 0.05)},Caption,,0,0,0,,${fade}${assText(sc.caption)}`);
+    const own = cuts.filter((c) => c.scene === sc && c.caption);
+    if (own.length) {
+      // 컷마다 그 컷에 보이는 것의 이름 (컷이 바뀌면 자막도 바뀜)
+      for (const c of own) ev.push(`Dialogue: 1,${assTime(c.start + 0.05)},${assTime(c.start + c.duration - 0.03)},Caption,,0,0,0,,{\fad(60,60)}${assText(c.caption)}`);
+    } else if (sc.caption) ev.push(`Dialogue: 1,${assTime(s + 0.1)},${assTime(e - 0.05)},Caption,,0,0,0,,${fade}${assText(sc.caption)}`);
     if (sc.price_tag) {
       ev.push(`Dialogue: 3,${assTime(s + 0.35)},${assTime(e - 0.1)},Price,,0,0,0,,{\\fad(120,120)\\t(0,180,\\fscx112\\fscy112)\\t(180,320,\\fscx100\\fscy100)}${assText(sc.price_tag)}`);
     }
