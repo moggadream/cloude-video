@@ -5,7 +5,7 @@ import { generate, aiBackend } from '../ai/index.js';
 import { loadSkill, loadStyleSamples, recentFeedback } from '../ai/skills.js';
 import { smallJpegBase64 } from './media.js';
 import { speechText } from './speech.js';
-import { FRAMINGS, FRAMING_IDS, storyboardFor, storyboardGuide, scoreStoryboard, autoStoryboard } from '../guides/storyboards.js';
+import { FRAMINGS, FRAMING_IDS, storyboardFor, storyboardGuide, scoreStoryboard, autoStoryboard, usableShots } from '../guides/storyboards.js';
 
 export const STORYBOARD_PASS = 75;
 const STORYBOARD_KEYS = ['shorts', 'reels', 'tiktok'];
@@ -269,6 +269,7 @@ function shotInfoMap(plan, project) {
 /** 대본 작성 때 보여줄 스토리보드 */
 function storyboardText(plan, key) {
   const sb = plan.storyboard;
+  const sbTotal = sb.beats.reduce((a, b) => a + (Number(b.sec) || 0), 0);
   const lines = [
     `## 스토리보드 (점수 ${sb.score}/100, 인기 쇼츠 기준과 비교해 통과한 컷 구성)`,
     `- 첫 컷 제목: ${String(sb.hook_title || '').replace(/\n/g, ' / ')}`,
@@ -277,10 +278,11 @@ function storyboardText(plan, key) {
     '### 스토리보드로 장면 쓰는 법 (스킬의 장면 구성보다 이것이 우선)',
     '- 비트 하나 = 장면 하나. 장면의 shot 은 그 비트의 첫 컷, extra_shots 는 나머지 컷 (같은 나레이션 동안 빠르게 이어짐).',
     '- 항목마다 반복하는 비트(이름표가 다른 컷들)는 항목마다 장면을 나눠도 된다. 이때 label 은 그 항목의 이름표.',
-    '- 나레이션 길이는 비트 길이에 맞춘다 (1초에 약 5자). 컷이 빠른 비트는 나레이션도 짧게. 컷이 1개인 장면은 나레이션 12자 안팎.',
+    `- **나레이션 전체 분량: 공백 빼고 ${Math.round(sbTotal * 6)}자 안팎** (스토리보드 ${Math.round(sbTotal)}초 × 1초에 약 6자. 인기 리뷰 쇼츠는 영상 내내 말한다). 이보다 크게 짧으면 영상이 기준보다 짧아진다.`,
+    '- 장면마다 나레이션은 그 비트 길이 × 6자 정도. 컷이 여러 개인 장면은 그만큼 길게 말하고, 컷이 1개인 장면만 12자 안팎으로 짧게.',
     '- 첫 장면 나레이션은 10자 안팎의 의견·반전·가격 한마디 ("이 가격에 이게 나와?", "여긴 앉아만 있으면 돼"). 누구랑·언제 갔는지 같은 상황 설명으로 시작하지 않는다. 첫 컷은 2초 안에 넘어간다.',
     '- 모든 장면에 나레이션이 있다. 인기 리뷰 쇼츠는 영상의 90% 가까이 쉬지 않고 말한다. 마지막 장면도 팁 한마디로 끝낸다 (화면 글자만 두고 말을 비우지 않는다).',
-    '- 스토리보드에 없는 컷을 더하지 않는다. 특히 같은 영상의 다른 장면(m3:f0과 m3:f1)은 거의 같은 화면이라 한 영상에서 한 컷만.',
+    '- 스토리보드에 없는 컷을 더하지 않는다. 같은 영상에서 8초 안쪽의 장면(m3:f0과 m3:f1)은 거의 같은 화면이라 함께 쓰지 않는다.',
     '- label 은 스토리보드의 이름표를 그대로. 이름표가 없는 비트는 빈칸.',
     '- 컷이 2개 이상인 장면은 cut_captions 에 컷마다 그 컷에 보이는 것의 짧은 이름(메뉴·상품·장소, 10자 안팎)을 적는다. 인기 쇼츠는 컷이 바뀌면 이름도 바뀐다 (한 컷에 한 정보). 이때 caption 은 비워도 된다.',
   ];
@@ -296,9 +298,12 @@ export async function makeStoryboard(project, plan) {
   const concept = plan.concept;
   const info = shotInfoMap(plan, project);
   const tpl = storyboardFor(concept);
+  const usable = usableShots(info);
   const base = [
     '## 이 컨셉의 스토리보드 기준 (인기 쇼츠를 컷 단위로 분석한 결과)', storyboardGuide(concept), '',
     '## 장면 목록 (ref | 위치 | 구도 | 품질 | 보이는 것 | 상품·가격)', shotTable(plan, project), '',
+    `## 쓸 수 있는 서로 다른 장면 ${usable.length}개 (이 중 최소 ${Math.min(tpl.minCuts || 6, usable.length)}개 이상을 컷으로)`,
+    usable.join(', '), '',
     `## 자료 요약\n- 장소: ${plan.place_name || '(모름)'}\n- ${plan.summary}\n- 핵심 사실: ${(plan.key_facts || []).join(' / ')}`,
   ].join('\n');
   const system = [
@@ -308,7 +313,8 @@ export async function makeStoryboard(project, plan) {
     '- 각 컷의 구도는 그 비트의 기준 구도 안에서 고릅니다. 맞는 좋은 장면이 없는 비트(꼭이 아닌 것)는 **억지로 채우지 말고 뺍니다**.',
     '- 비트의 note(말할 내용)는 그 비트 화면에 보이는 것과 맞아야 합니다 (음식 화면에 "테이블 간격 좁음" 같은 말 금지).',
     '- 마지막 비트는 보는 사람의 다음 행동에 도움 되는 정보(위치·웨이팅·주문 팁·가는 법)로 끝냅니다. 아쉬운 점으로만 끝내지 않고, 아쉬운 점은 팁으로 바꿔 씁니다 (예: "냄새 배니 겉옷은 맡기고").',
-    '- sec 는 컷 수 × 기준 한 컷 길이로 맞춥니다. 전체 길이도 기준 범위 안으로.',
+    '- **쓸 수 있는 장면은 아끼지 말고 많이 씁니다.** 인기 쇼츠는 13초에 12컷, 30초에 20컷처럼 컷이 많습니다. 같은 영상이라도 8초 넘게 떨어진 장면은 다른 컷입니다. 여러 컷 비트(hero, more 등)에 2~4컷씩 넣습니다.',
+    '- sec 는 컷 수 × 기준 한 컷 길이로 맞춥니다. 전체 길이도 기준 범위 안으로 (기준 최소 길이보다 짧으면 안 됩니다).',
     tpl.label ? '- 목록 비트의 컷마다 label 에 "번호. 이름(+용량·가격)"을 적습니다. 이름은 장면 목록에 있는 것만.' : '- label 은 모두 빈칸.',
     '- note 에는 그 비트에서 전할 사실 한 줄 (장면 목록·자료 요약에 있는 것만).',
   ].join('\n');

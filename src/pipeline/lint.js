@@ -140,6 +140,13 @@ export function lintOutput(key, out, plan, project) {
       if (near.length) add(near.length >= 2 ? 'error' : 'warn', `같은 화면이 반복되는 컷: ${near.slice(0, 4).join(', ')} (같은 영상 8초 안쪽). 영상 하나에서 한 컷만 쓴다`);
     }
     // 스토리보드 컷 길이: 나레이션이 길면 컷이 늘어져 기준(인기 쇼츠)보다 느려진다 → 오류로 보고 자동 보완
+    // 스토리보드 기준 길이보다 짧은 영상 (나레이션이 너무 짧음) → 오류로 보고 자동 보완
+    if (key !== 'longform' && plan.storyboard?.beats?.length) {
+      const minSec = storyboardFor(plan.concept).totalSec[0];
+      const chars = out.scenes.reduce((a, s) => a + String(s.narration || '').replace(/\s/g, '').length, 0);
+      const est = chars / 6.5 + out.scenes.length * 0.25;
+      if (est < minSec * 0.9) add('error', `영상이 너무 짧음 (나레이션 공백 빼고 ${chars}자 ≈ ${Math.round(est)}초, 기준 ${minSec}초 이상 → 나레이션을 ${Math.round((minSec - out.scenes.length * 0.25) * 6.5)}자 이상으로)`);
+    }
     if (key !== 'longform' && plan.storyboard?.beats?.length) {
       const hi = storyboardFor(plan.concept).cutSec[1];
       const slow = [];

@@ -29,7 +29,7 @@ export const STORYBOARDS = {
   restaurant: {
     form: '쇼케이스 (대표 메뉴를 빠른 컷으로)',
     reference: { title: '12000원에 이게 다 무제한이라고?', url: 'https://www.youtube.com/shorts/xZUaA5mmRl0', views: '263만', sec: 13 },
-    cutSec: [1, 2.2], totalSec: [12, 45], label: false,
+    cutSec: [1, 2.2], totalSec: [12, 45], minCuts: 8, label: false,
     mix: { minClose: 0.6, maxWide: 0.2 },
     beats: [
       { id: 'hook', role: '첫 컷: 대표 메뉴 시즐(김·불·늘어남) 또는 가격이 보이는 간판 + 큰 제목', framing: ['sizzle', 'close', 'top', 'sign', 'price'], need: true },
@@ -43,7 +43,7 @@ export const STORYBOARDS = {
   cafe: {
     form: '방문 흐름 (외관 → 메뉴 → 공간)',
     reference: { title: '사람들이 잘 모르는 성수동 카페 추천!', url: 'https://www.youtube.com/shorts/AgUDtoqj1Fo', views: '16만', sec: 16 },
-    cutSec: [1.3, 2.8], totalSec: [14, 30], label: false,
+    cutSec: [1.3, 2.8], totalSec: [14, 30], minCuts: 8, label: false,
     mix: { minClose: 0.3, minWide: 0.3 },
     beats: [
       { id: 'hook', role: '첫 컷: 외관이나 가장 예쁜 공간 + 큰 2줄 제목 (동네 + 느낌)', framing: ['wide', 'sign'], need: true },
@@ -56,7 +56,7 @@ export const STORYBOARDS = {
   mart: {
     form: '번호 목록 (상품마다 같은 틀)',
     reference: { title: '코스트코 몇년째 꼭 사는 재구매템 베스트10', url: 'https://www.youtube.com/shorts/uhzy_p9hfBQ', views: '174만', sec: 29 },
-    cutSec: [2, 3.5], totalSec: [20, 45], label: true,
+    cutSec: [2, 3.5], totalSec: [20, 45], minCuts: 7, label: true,
     mix: { minClose: 0.7, maxWide: 0.15 },
     beats: [
       { id: 'hook', role: '첫 컷: 할인 폭이 가장 큰 상품 + 가격표, 또는 매장 입구 + "이번 주 ○가지" 제목', framing: ['price', 'close', 'sign', 'wide'], need: true },
@@ -68,7 +68,7 @@ export const STORYBOARDS = {
   market: {
     form: '번호 목록 (먹거리마다 만드는 손)',
     reference: { title: '망원시장 맛집 가이드 이걸로 끝낼게요!', url: 'https://www.youtube.com/shorts/iHKGeRvx6cQ', views: '25만', sec: 49 },
-    cutSec: [1.5, 3], totalSec: [20, 50], label: true,
+    cutSec: [1.5, 3], totalSec: [20, 50], minCuts: 8, label: true,
     mix: { minClose: 0.6, maxWide: 0.25 },
     beats: [
       { id: 'hook', role: '첫 컷: 시장 입구 간판 + "꼭 먹어야 할 ○가지" 또는 가장 센 시즐', framing: ['sign', 'sizzle', 'hands'], need: true },
@@ -80,7 +80,7 @@ export const STORYBOARDS = {
   park: {
     form: '풍경 산책 (느린 넓은 컷)',
     reference: { title: '핑크뮬리·호수·단풍 서울 근교 가을 명소', url: 'https://www.youtube.com/shorts/OGCzwJkhFUc', views: '46만', sec: 57 },
-    cutSec: [3, 5.5], totalSec: [20, 55], label: false,
+    cutSec: [3, 5.5], totalSec: [20, 55], minCuts: 6, label: false,
     mix: { minClose: 0, minWide: 0.7 },
     beats: [
       { id: 'hook', role: '첫 컷: 가장 예쁜 풍경 (앞 꽃·풀 / 가운데 나무 / 뒤 하늘 3겹) + 계절·장소 제목', framing: ['wide'], need: true },
@@ -93,7 +93,7 @@ export const STORYBOARDS = {
   amusement: {
     form: '꿀팁 목록 (2단 자막)',
     reference: { title: '롯데월드 꿀팁 10가지', url: 'https://www.youtube.com/shorts/svCSYgSVgnI', views: '188만', sec: 59 },
-    cutSec: [2.5, 5.5], totalSec: [25, 58], label: true,
+    cutSec: [2.5, 5.5], totalSec: [25, 58], minCuts: 7, label: true,
     mix: { minClose: 0, maxWide: 0.85 },
     beats: [
       { id: 'hook', role: '첫 컷: 놀이기구가 움직이는 넓은 장면 + "○○ 처음 가면 꼭 알아야 할 것"', framing: ['wide', 'sign', 'pov'], need: true },
@@ -106,7 +106,7 @@ export const STORYBOARDS = {
   festival: {
     form: '현장 리뷰 (상징 → 먹거리·체험 → 가격 → 한 줄 평)',
     reference: { title: '화제의 울산 옹기 축제 실제 먹거리 어떨까?', url: 'https://www.youtube.com/shorts/zcQxoEmnIvM', views: '93만', sec: 51 },
-    cutSec: [2, 4.5], totalSec: [20, 50], label: false,
+    cutSec: [2, 4.5], totalSec: [20, 50], minCuts: 7, label: false,
     mix: { minClose: 0.35, maxWide: 0.5 },
     beats: [
       { id: 'hook', role: '첫 컷: 축제 상징 장면(전경·조형물·공연) + 축제 이름·기간 제목', framing: ['wide', 'sign'], need: true },
@@ -119,7 +119,7 @@ export const STORYBOARDS = {
   popup: {
     form: '방문 흐름 (입구 → 굿즈 → 포토존)',
     reference: { title: '팝업스토어 오픈런 후기', url: 'https://www.youtube.com/shorts/WatDDcvQ6Os', views: '40만', sec: 17 },
-    cutSec: [1.3, 3], totalSec: [14, 35], label: false,
+    cutSec: [1.3, 3], totalSec: [14, 35], minCuts: 7, label: false,
     mix: { minClose: 0.3, minWide: 0.2 },
     beats: [
       { id: 'hook', role: '첫 컷: 입구 상징물·대표 포토존 + "○○ 팝업, ○일까지" 제목', framing: ['sign', 'wide'], need: true },
@@ -132,7 +132,7 @@ export const STORYBOARDS = {
 };
 // 컨셉을 모를 때 (기타)
 STORYBOARDS.other = {
-  form: '방문 흐름', reference: null, cutSec: [1.5, 4], totalSec: [15, 50], label: false,
+  form: '방문 흐름', reference: null, cutSec: [1.5, 4], totalSec: [15, 50], minCuts: 6, label: false,
   mix: { minClose: 0.3, maxWide: 0.6 },
   beats: [
     { id: 'hook', role: '첫 컷: 가장 센 장면 + 큰 제목', framing: FRAMING_IDS, need: true },
@@ -157,6 +157,21 @@ export function storyboardGuide(concept) {
     ...t.beats.map((b, i) => `  ${i + 1}. ${b.id}${b.need ? ' (꼭)' : ''}${b.multi ? ' [여러 컷 빠르게]' : ''}${b.perItem ? ' [항목마다 반복]' : ''}: ${b.role} / 구도: ${b.framing.join('·')}`),
   ];
   return lines.join('\n');
+}
+
+/**
+ * 쓸 수 있는 서로 다른 장면 수: 품질 good·ok 이고, 같은 영상에서는 8초 넘게 떨어진 장면만 따로 센다
+ * @param {Map<string,{quality?:string, time?:number}>} shotInfo
+ */
+export function usableShots(shotInfo) {
+  const picked = [];
+  for (const [ref, v] of shotInfo) {
+    if (v.quality === 'bad') continue;
+    const media = String(ref).split(':')[0];
+    const clash = picked.some((p) => p.media === media && (!String(ref).includes(':') || Math.abs((p.time ?? 0) - (v.time ?? 0)) < 8));
+    if (!clash) picked.push({ ref, media, time: v.time });
+  }
+  return picked.map((p) => p.ref);
 }
 
 /**
@@ -268,6 +283,11 @@ export function scoreStoryboard(sb, concept, shotInfo) {
   if (near.length >= 2) gate.push('같은 화면 반복');
   if (fitN && misfit.length / fitN > 0.25) gate.push('구도 안 맞는 컷 많음');
   if (missing.length) gate.push('꼭 비트 빠짐');
+  // 쓸 수 있는 장면이 있는데 컷이 적거나 영상이 너무 짧으면 다시 (인기 쇼츠는 컷이 많다)
+  const can = usableShots(shotInfo).length;
+  const wantCuts = Math.min(t.minCuts || 6, can);
+  if (cuts.length < wantCuts) { gate.push('컷 부족'); issues.push(`컷 ${cuts.length}개 → 쓸 수 있는 서로 다른 장면이 ${can}개라 ${wantCuts}컷 이상 (good·ok 장면을 더 쓴다. 같은 영상은 8초 넘게 떨어진 장면이면 따로 써도 된다)`); }
+  if (total < t.totalSec[0] * 0.9 && can >= (t.minCuts || 6)) { gate.push('너무 짧음'); }
   if (gate.length) { score = Math.min(score, 74); issues.unshift(`통과 불가: ${gate.join(', ')}`); }
   return {
     score,
