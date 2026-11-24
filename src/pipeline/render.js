@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { config } from '../config.js';
-import { ffmpeg, audioDuration, concatLine } from './media.js';
+import { ffmpeg, audioDuration, concatLine, videoColorFilter } from './media.js';
 import { narrate, makeMusic } from './audio.js';
 import { renderOverlay } from './overlay.js';
 
@@ -222,13 +222,19 @@ export function fillMode(media, fmt, framing = '') {
   return ar >= 1.2 ? 'cover' : 'fit';
 }
 
+// ---------- 색 맞추기 ----------
+// 사진(JPEG)은 "전체 범위·BT.601" 색이라 영상 표준(보통 범위·BT.709)으로 바꾼다
+const IMAGE_COLOR = 'scale=in_range=pc:out_range=tv:in_color_matrix=bt601:out_color_matrix=bt709,format=yuv420p';
 async function renderSegment(sc, index, fmt, dir, out) {
   const { w: W, h: H } = fmt;
   const frames = Math.round(sc.duration * FPS);
   const bg = `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},boxblur=40:2,eq=brightness=-0.12:saturation=1.1`;
   const fg = `scale=${W}:${H}:force_original_aspect_ratio=decrease`;
   const cover = `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H}`;
-  const enc = ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-r', String(FPS), '-an'];
+  // 모든 조각을 같은 색 규격(BT.709, 보통 범위)으로: 조각마다 색 규격이 다르면 이어 붙인 영상의
+  // 색이 컷마다 달라 보이고, 움직이는 글자(Remotion)가 그 영상을 못 읽는다
+  const enc = ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-r', String(FPS),
+    '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv', '-an'];
   const mode = fillMode(sc.media, fmt, sc.framing);
   sc.fill = mode;
 
@@ -238,7 +244,7 @@ async function renderSegment(sc, index, fmt, dir, out) {
     const dur = sc.duration.toFixed(3);
     const along = index % 2 === 0 ? `t/${dur}` : `(1-t/${dur})`;
     const filter =
-      `[0:v]scale=-2:${H * 2}:flags=bicubic,` +
+      `[0:v]${IMAGE_COLOR},scale=-2:${H * 2}:flags=bicubic,` +
       `crop=${W * 2}:${H * 2}:x='(iw-ow)*(0.2*gt(iw/ow\\,2.2)+(1-0.4*gt(iw/ow\\,2.2))*${along})':y=0,` +
       `scale=${W}:${H}:flags=bicubic,setsar=1,format=yuv420p[v]`;
     await ffmpeg([
@@ -254,8 +260,8 @@ async function renderSegment(sc, index, fmt, dir, out) {
     // 줌은 픽셀 단위로 반올림돼 덜덜 떨리기 쉬워서, 4배로 키운 뒤 줌하고 다시 줄인다 (떨림이 1/4 픽셀 이하)
     const zoom = index % 2 === 0 ? `1+0.05*on/${frames}` : `1.05-0.05*on/${frames}`;
     const base = mode === 'fit'
-      ? `[0:v]split=2[a][b];[a]${bg}[bg];[b]${fg}[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,`
-      : `[0:v]${cover},`;
+      ? `[0:v]${IMAGE_COLOR},split=2[a][b];[a]${bg}[bg];[b]${fg}[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,`
+      : `[0:v]${IMAGE_COLOR},${cover},`;
     const filter =
       `${base}scale=${W * 4}:${H * 4}:flags=bicubic,` +
       `zoompan=z='${zoom}':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':d=${frames}:s=${W}x${H}:fps=${FPS},` +
@@ -276,8 +282,9 @@ async function renderSegment(sc, index, fmt, dir, out) {
     const frame = mode === 'fit'
       ? `split=2[a][b];[a]${bg}[bg];[b]${fg}[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2`
       : cover;
+    const color = await videoColorFilter(src);
     const filter =
-      `[0:v]fps=${FPS}${stab ? `,${stab}` : ''},${frame},tpad=stop_mode=clone:stop_duration=${sc.duration},` +
+      `[0:v]${color},fps=${FPS}${stab ? `,${stab}` : ''},${frame},tpad=stop_mode=clone:stop_duration=${sc.duration},` +
       `trim=duration=${sc.duration}` +
       `,setsar=1,format=yuv420p[v]`;
     await ffmpeg([

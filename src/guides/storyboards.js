@@ -29,7 +29,7 @@ export const STORYBOARDS = {
   restaurant: {
     form: '쇼케이스 (대표 메뉴를 빠른 컷으로)',
     reference: { title: '12000원에 이게 다 무제한이라고?', url: 'https://www.youtube.com/shorts/xZUaA5mmRl0', views: '263만', sec: 13 },
-    cutSec: [1, 2.2], totalSec: [15, 35], label: false,
+    cutSec: [1, 2.2], totalSec: [12, 45], label: false,
     mix: { minClose: 0.6, maxWide: 0.2 },
     beats: [
       { id: 'hook', role: '첫 컷: 대표 메뉴 시즐(김·불·늘어남) 또는 가격이 보이는 간판 + 큰 제목', framing: ['sizzle', 'close', 'top', 'sign', 'price'], need: true },

@@ -39,7 +39,10 @@ function usePop(durationInFrames, { from = 0.7, damping = 11 } = {}) {
 function Hook({ text, dur, L, W, vertical }) {
   const { scale, opacity } = usePop(dur, { from: 0.55, damping: 10 });
   const lines = String(text).split('\n');
-  const size = vertical ? 104 : 92;
+  // 인기 쇼츠의 첫 화면 큰 글씨는 화면 높이의 20~40%: 글자 수가 적을수록 크게, 화면 폭 안에서 최대로
+  const maxChars = Math.max(...lines.map((l) => l.replace(/\s/g, '').length + l.split(' ').length * 0.3), 1);
+  const room = W - L.marginL - L.marginR;
+  const size = Math.round(Math.min(vertical ? 160 : 120, Math.max(vertical ? 84 : 72, room / maxChars)));
   return (
     <AbsoluteFill style={{ alignItems: 'center', paddingTop: L.hookTop, paddingLeft: L.marginL, paddingRight: L.marginR }}>
       <div style={{ transform: `scale(${scale}) rotate(-2deg)`, opacity, textAlign: 'center', fontFamily: 'BlackHanSans', lineHeight: 1.12, maxWidth: W - L.marginL - L.marginR }}>

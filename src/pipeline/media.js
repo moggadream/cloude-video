@@ -27,6 +27,35 @@ export function run(cmd, args, { quiet = true, cwd } = {}) {
 
 export const ffmpeg = (args, opts = {}) => run(config.ffmpegPath, ['-hide_banner', '-loglevel', 'error', '-y', ...args], opts);
 
+// ---------- 색 맞추기 (영상 조각·분석용 장면 사진 공통) ----------
+const colorCache = new Map();
+
+/**
+ * 영상 색 → BT.709 보통 범위. 아이폰 등의 HDR(HLG·PQ) 영상은 일반(SDR) 화면에 맞게 톤 매핑한다
+ * (그대로 쓰면 색이 뿌옇게 바래 보인다). 끄기: HDR_TONEMAP=off
+ */
+export async function videoColorFilter(src) {
+  if (colorCache.has(src)) return colorCache.get(src);
+  let info = {};
+  try {
+    const out = await run(config.ffprobePath, ['-v', 'error', '-select_streams', 'v:0',
+      '-show_entries', 'stream=color_transfer,color_space,color_range', '-of', 'json', src]);
+    info = JSON.parse(out).streams?.[0] || {};
+  } catch { /* 모르면 BT.709로 본다 */ }
+  const trc = info.color_transfer || '';
+  let f;
+  if ((trc === 'arib-std-b67' || trc === 'smpte2084') && (process.env.HDR_TONEMAP || 'on') !== 'off') {
+    f = `zscale=tin=${trc}:min=bt2020nc:pin=bt2020:rin=tv:t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,`
+      + 'tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p';
+  } else if (['bt470bg', 'smpte170m', 'bt601'].includes(info.color_space)) {
+    f = `scale=in_color_matrix=bt601:out_color_matrix=bt709:in_range=${info.color_range === 'pc' ? 'pc' : 'tv'}:out_range=tv,format=yuv420p`;
+  } else {
+    f = `scale=in_range=${info.color_range === 'pc' ? 'pc' : 'tv'}:out_range=tv,format=yuv420p`;
+  }
+  colorCache.set(src, f);
+  return f;
+}
+
 /** ffmpeg 목록 파일(concat)에 쓰는 경로. Windows의 \\ 도 / 로 바꿔 둔다 */
 export const concatLine = (f) => `file '${f.replace(/\\/g, '/').replace(/'/g, "'\\''")}'`;
 
@@ -122,7 +151,8 @@ export async function prepareMedia(item, dir) {
     const f = `${item.id}_f${i}.jpg`;
     await ffmpeg([
       '-ss', String(t), '-i', src, '-frames:v', '1',
-      '-vf', "scale='min(1280,iw)':'min(1280,ih)':force_original_aspect_ratio=decrease",
+      // 분석용 장면 사진도 색을 맞춘다 (HDR 영상이 뿌옇게 보여 AI가 품질을 잘못 판단하지 않게)
+      '-vf', `${await videoColorFilter(src)},scale='min(1280,iw)':'min(1280,ih)':force_original_aspect_ratio=decrease`,
       '-q:v', '4', path.join(dir, 'work', f),
     ]);
     frames.push({ file: f, time: t });
