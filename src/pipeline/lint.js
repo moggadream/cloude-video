@@ -96,6 +96,15 @@ export function lintOutput(key, out, plan, project) {
     if (!out.hook) add('error', '첫 화면 문구(hook)가 없음');
     else if (hookLines.some((l) => l.length > HOOK_LINE_MAX)) add('warn', `훅 한 줄이 ${HOOK_LINE_MAX}자 넘음: "${out.hook}"`);
     if (/^(안녕|오늘은|여러분)/.test(out.scenes[0]?.narration || '')) add('warn', '첫 나레이션이 인사/도입으로 시작 (훅이 약함)');
+    // 인기 리뷰 쇼츠는 첫마디가 의견·반전·가격 ("절대 다시 안 가", "아직 안 죽었다"). 누구랑 언제 갔는지는 뒤로
+    else if (key !== 'longform' && /^(동료|친구|가족|엄마|아빠|남편|아내|와이프|남친|여친|애들|아이|회사|오늘|어제|주말|퇴근|점심|저녁)/.test(out.scenes[0]?.narration || '')) {
+      add('warn', '첫 나레이션이 상황 설명(누구랑·언제)으로 시작. 첫마디는 의견·반전·가격으로 ("이 가격에 이게 나와?")');
+    }
+    // 인기 리뷰 쇼츠는 영상의 86~97% 동안 말한다 → 숏폼에서 나레이션 없는 장면은 오류 (docs/evals/2026-11-24-reference-shorts.md)
+    if (key !== 'longform') {
+      const silent = out.scenes.map((s, i) => (String(s.narration || '').trim() ? 0 : i + 1)).filter(Boolean);
+      if (silent.length) add('error', `나레이션이 없는 장면: ${silent.join(', ')}번. 숏폼은 끝까지 쉬지 않고 말한다 (마지막 장면도 팁 한마디)`);
+    }
     const norm = (x) => String(x || '').replace(/[\s\n.,!?~·]/g, '');
     const h = norm(out.hook);
     const n0 = norm(out.scenes[0]?.narration);
@@ -134,13 +143,19 @@ export function lintOutput(key, out, plan, project) {
     if (key !== 'longform' && plan.storyboard?.beats?.length) {
       const hi = storyboardFor(plan.concept).cutSec[1];
       const slow = [];
+      let firstSlow = false;
       out.scenes.forEach((s, i) => {
         const cutsN = 1 + (s.extra_shots || []).length;
         const chars = String(s.narration || '').replace(/\s/g, '').length;
         const perCut = Math.max(2.2, chars / 6 + 0.9) / cutsN;
-        if (perCut > hi * 1.4) slow.push(`${i + 1}번(${chars}자, 컷 ${cutsN}개 → 공백 빼고 ${Math.max(6, Math.floor((hi * 1.2 * cutsN - 0.9) * 6))}자 이하)`);
+        // 첫 컷은 더 엄격하게: 인기 쇼츠의 첫 컷은 1.3~2.5초 (우리 릴스는 5.2초였음)
+        const limit = i === 0 ? hi * 1.25 : hi * 1.4;
+        if (perCut > limit) {
+          if (i === 0) firstSlow = true;
+          slow.push(`${i + 1}번(${chars}자, 컷 ${cutsN}개 → 공백 빼고 ${Math.max(6, Math.floor(((i === 0 ? hi * 1.1 : hi * 1.2) * cutsN - 0.9) * 6))}자 이하)`);
+        }
       });
-      if (slow.length) add(slow.length >= 2 ? 'error' : 'warn', `컷이 기준(${hi}초)보다 오래 머무는 장면: ${slow.join(', ')}. 나레이션을 줄이거나 그 비트의 컷(extra_shots)을 늘린다`);
+      if (slow.length) add(slow.length >= 2 || firstSlow ? 'error' : 'warn', `컷이 기준(${hi}초)보다 오래 머무는 장면: ${slow.join(', ')}. 나레이션을 줄이거나 그 비트의 컷(extra_shots)을 늘린다${firstSlow ? '. 특히 첫 장면은 2초 안에 다음 컷으로' : ''}`);
     }
   }
   // 장소 이름 핵심(연도·○·공백 제외): "2026 ○○강 억새축제" → "강억새축제"

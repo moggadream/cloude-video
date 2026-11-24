@@ -391,14 +391,54 @@ export function overlayEvents(scenes, script, format, cuts = []) {
     const e = sc.start + sc.duration;
     // 이름표: 첫 장면은 큰 제목(훅)과 겹치니 뺀다
     if (sc.label && !(i === 0 && script.hook)) push('label', s + 0.05, e - 0.05, sc.label);
-    // 컷마다 그 컷에 보이는 것의 이름 (컷이 바뀌면 자막도 바뀜), 없으면 장면 자막 하나
-    const own = cuts.filter((c) => c.scene === sc && c.caption);
-    if (own.length) for (const c of own) push('caption', c.start + 0.05, c.start + c.duration - 0.03, c.caption);
-    else if (sc.caption) push('caption', s + 0.1, e - 0.05, sc.caption);
+    // 세로 숏폼: 말하는 대로 짧게 끊어 바뀌는 자막 (인기 리뷰 쇼츠는 0.6~1.3초마다 바뀜,
+    // docs/evals/2026-11-24-reference-shorts.md). 나레이션이 없는 장면만 컷 이름·장면 자막을 쓴다.
+    const speech = format !== 'longform' && sc.voice ? speechChunks(sc.narration) : [];
+    if (speech.length) {
+      const vs = s + VOICE_LEAD;
+      const ve = Math.min(e - 0.05, vs + sc.voice.duration);
+      const totalChars = speech.reduce((a, c) => a + c.replace(/\s/g, '').length, 0) || 1;
+      let t = vs;
+      for (const [k, c] of speech.entries()) {
+        const len = (ve - vs) * (c.replace(/\s/g, '').length / totalChars);
+        push('caption', t, k === speech.length - 1 ? ve : t + len - 0.02, c);
+        t += len;
+      }
+    } else {
+      // 컷마다 그 컷에 보이는 것의 이름 (컷이 바뀌면 자막도 바뀜), 없으면 장면 자막 하나
+      const own = cuts.filter((c) => c.scene === sc && c.caption);
+      if (own.length) for (const c of own) push('caption', c.start + 0.05, c.start + c.duration - 0.03, c.caption);
+      else if (sc.caption) push('caption', s + 0.1, e - 0.05, sc.caption);
+    }
     if (sc.price_tag) push('price', s + 0.35, e - 0.1, sc.price_tag);
     if (format === 'longform' && sc.chapter) push('chapter', s + 0.2, Math.min(e, s + 3.5), sc.chapter);
   }
   return ev;
+}
+
+/**
+ * 나레이션을 말하는 순서대로 짧은 자막 조각으로 나눈다 (조각당 공백 빼고 4~9자, 낱말은 자르지 않음).
+ * 문장부호에서 먼저 끊고, 긴 구절은 띄어쓰기에서 끊는다.
+ */
+export function speechChunks(text, max = 9) {
+  const clauses = String(text || '').replace(/\s+/g, ' ').trim()
+    .split(/(?<=[.,!?~…])\s*/).map((x) => x.replace(/[.,]+$/, '').trim()).filter(Boolean);
+  const out = [];
+  const size = (x) => x.replace(/\s/g, '').length;
+  for (const cl of clauses) {
+    let cur = '';
+    for (const w of cl.split(' ')) {
+      const next = cur ? `${cur} ${w}` : w;
+      if (cur && size(next) > max) { out.push(cur); cur = w; } else cur = next;
+    }
+    if (cur) {
+      // 너무 짧은 꼬리(3자 이하)는 앞 조각에 붙인다 (같은 구절 안에서만)
+      const prev = out[out.length - 1];
+      if (size(cur) <= 3 && prev && cl.includes(prev) && size(prev) + size(cur) <= max + 3) out[out.length - 1] = `${prev} ${cur}`;
+      else out.push(cur);
+    }
+  }
+  return out;
 }
 
 function buildAss(events, fmt) {
