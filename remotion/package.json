@@ -1,0 +1,18 @@
+{
+  "name": "cloude-video-overlay",
+  "private": true,
+  "description": "영상 위 화면 글자(제목·자막·가격표·이름표)를 인기 쇼츠처럼 움직이게 그리는 Remotion 층. 설치: cd remotion && npm install",
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.jsx"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.542",
+    "@remotion/cli": "4.0.542",
+    "@remotion/fonts": "4.0.542",
+    "@remotion/renderer": "4.0.542",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "remotion": "4.0.542"
+  }
+}

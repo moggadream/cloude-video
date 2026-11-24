@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import { config } from '../config.js';
 import { ffmpeg, audioDuration, concatLine } from './media.js';
 import { narrate, makeMusic } from './audio.js';
+import { renderOverlay } from './overlay.js';
 
 export const FORMATS = {
   shorts: { label: '유튜브 쇼츠', w: 1080, h: 1920, maxTotal: 59, minScene: 2.2, maxScene: 7, captionMargin: 420 },
@@ -15,6 +16,8 @@ export const FORMATS = {
 };
 
 const FPS = 30;
+// 음량: 쇼츠·릴스·틱톡·유튜브 기준 -14 LUFS (플랫폼이 소리를 줄이거나 키우지 않게)
+const LOUDNORM = 'loudnorm=I=-14:TP=-1.5:LRA=11,aresample=44100';
 const VOICE_LEAD = 0.25; // 장면 시작 후 나레이션이 시작되기까지
 const VOICE_TAIL = 0.45; // 나레이션이 끝난 뒤 여유
 
@@ -89,7 +92,11 @@ export async function renderVideo({ format, script, project, dir, musicPrompt, o
 
   // 6) 자막 파일
   const assFile = path.join(work, 'subs.ass');
-  await fs.writeFile(assFile, buildAss(scenes, script, fmt, format, cuts));
+  const events = overlayEvents(scenes, script, format, cuts);
+  // 화면 글자: Remotion(움직이는 글자) → 안 되면 ASS 자막
+  const overlaid = path.join(work, 'overlaid.mp4');
+  const useOverlay = await renderOverlay({ video: joined, out: overlaid, events, fmt, duration: total, onProgress: (r) => onProgress(0.8 + 0.13 * r) });
+  if (!useOverlay) await fs.writeFile(assFile, buildAss(events, fmt));
 
   // 7) 최종 합성: 자막 입히기 + 나레이션 + 배경음악(나레이션 나올 때 자동으로 작아짐)
   const outFile = path.join(dir, 'out', `${format}.mp4`);
@@ -101,15 +108,15 @@ export async function renderVideo({ format, script, project, dir, musicPrompt, o
     ? `[1:a]aformat=sample_rates=44100:channel_layouts=stereo,asplit=2[v1][v2];` +
       `[2:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=0.35,atrim=0:${total}[m];` +
       `[m][v1]sidechaincompress=threshold=0.02:ratio=6:attack=30:release=500[duck];` +
-      `[duck][v2]amix=inputs=2:duration=first:normalize=0,afade=t=out:st=${Math.max(0, total - 1.5)}:d=1.5,alimiter=limit=0.95[a]`
-    : `[2:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=0.6,atrim=0:${total},afade=t=out:st=${Math.max(0, total - 1.5)}:d=1.5[a]`;
+      `[duck][v2]amix=inputs=2:duration=first:normalize=0,afade=t=out:st=${Math.max(0, total - 1.5)}:d=1.5,alimiter=limit=0.95,${LOUDNORM}[a]`
+    : `[2:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=0.6,atrim=0:${total},afade=t=out:st=${Math.max(0, total - 1.5)}:d=1.5,${LOUDNORM}[a]`;
   await ffmpeg([
-    '-i', joined,
+    '-i', useOverlay ? overlaid : joined,
     '-i', voiceTrack,
     '-stream_loop', '-1', '-i', music.file,
-    '-filter_complex', `[0:v]${subs}[v];${audioFilter}`,
-    '-map', '[v]', '-map', '[a]',
-    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-pix_fmt', 'yuv420p',
+    '-filter_complex', useOverlay ? audioFilter : `[0:v]${subs}[v];${audioFilter}`,
+    '-map', useOverlay ? '0:v' : '[v]', '-map', '[a]',
+    ...(useOverlay ? ['-c:v', 'copy'] : ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-pix_fmt', 'yuv420p']),
     '-c:a', 'aac', '-b:a', '192k', '-t', String(total),
     '-movflags', '+faststart', outFile,
   ], { cwd: work });
@@ -118,7 +125,7 @@ export async function renderVideo({ format, script, project, dir, musicPrompt, o
   const thumb = path.join(dir, 'out', `${format}_thumb.jpg`);
   await ffmpeg(['-ss', String(Math.min(1, total / 2)), '-i', outFile, '-frames:v', '1', '-q:v', '3', thumb]);
 
-  await fs.rm(work, { recursive: true, force: true });
+  if (process.env.KEEP_WORK !== "1") await fs.rm(work, { recursive: true, force: true }); // KEEP_WORK=1: 중간 파일 남기기(점검용)
   onProgress(1);
   return {
     file: `${format}.mp4`,
@@ -129,6 +136,7 @@ export async function renderVideo({ format, script, project, dir, musicPrompt, o
     voice: hasVoice,
     music: music.source,
     chapters: format === 'longform' ? chapterList(scenes) : [],
+    overlay: useOverlay ? 'remotion' : 'ass',
     sceneCount: scenes.length,
     cutCount: cuts.length,
     avgCut: Math.round((total / cuts.length) * 10) / 10,
@@ -369,7 +377,31 @@ export const assText = (s) => String(s)
   .trim()
   .replace(/\\/g, '＼').replace(/[{}]/g, '').replace(/\r?\n/g, '\\N');
 
-function buildAss(scenes, script, fmt, format, cuts = []) {
+/**
+ * 화면 글자 데이터: 언제(초) 어떤 글자를 어떤 모양으로 띄우는지. ASS 자막과 Remotion 글자 층이 함께 쓴다.
+ * type: hook(첫 화면 큰 제목) | caption(자막) | price(가격표) | label(번호 이름표) | chapter(롱폼 챕터)
+ */
+export function overlayEvents(scenes, script, format, cuts = []) {
+  const ev = [];
+  const r2 = (t) => Math.round(t * 100) / 100;
+  const push = (type, start, end, text) => { if (text && end > start) ev.push({ type, start: r2(start), end: r2(end), text: String(text) }); };
+  if (script.hook) push('hook', 0, Math.min(scenes[0].duration, 2.8), script.hook);
+  for (const [i, sc] of scenes.entries()) {
+    const s = sc.start;
+    const e = sc.start + sc.duration;
+    // 이름표: 첫 장면은 큰 제목(훅)과 겹치니 뺀다
+    if (sc.label && !(i === 0 && script.hook)) push('label', s + 0.05, e - 0.05, sc.label);
+    // 컷마다 그 컷에 보이는 것의 이름 (컷이 바뀌면 자막도 바뀜), 없으면 장면 자막 하나
+    const own = cuts.filter((c) => c.scene === sc && c.caption);
+    if (own.length) for (const c of own) push('caption', c.start + 0.05, c.start + c.duration - 0.03, c.caption);
+    else if (sc.caption) push('caption', s + 0.1, e - 0.05, sc.caption);
+    if (sc.price_tag) push('price', s + 0.35, e - 0.1, sc.price_tag);
+    if (format === 'longform' && sc.chapter) push('chapter', s + 0.2, Math.min(e, s + 3.5), sc.chapter);
+  }
+  return ev;
+}
+
+function buildAss(events, fmt) {
   const vertical = fmt.h > fmt.w;
   const base = vertical ? 1080 : 1080; // 글자 크기 기준 (짧은 변)
   const capSize = Math.round(base * (vertical ? 0.068 : 0.055));
@@ -404,29 +436,17 @@ function buildAss(scenes, script, fmt, format, cuts = []) {
     '[Events]',
     'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
   ];
-  const ev = [];
-  const fade = '{\\fad(150,150)}';
-  if (script.hook) {
-    const end = Math.min(scenes[0].duration, 2.8);
-    ev.push(`Dialogue: 2,${assTime(0)},${assTime(end)},Hook,,0,0,0,,{\\fad(100,250)}${assText(script.hook)}`);
-  }
-  for (const [i, sc] of scenes.entries()) {
-    const s = sc.start;
-    const e = sc.start + sc.duration;
-    // 이름표: 첫 장면은 큰 제목(훅)과 겹치니 뺀다
-    if (sc.label && !(i === 0 && script.hook)) ev.push(`Dialogue: 2,${assTime(s + 0.05)},${assTime(e - 0.05)},Label,,0,0,0,,{\\fad(80,80)}${assText(sc.label)}`);
-    const own = cuts.filter((c) => c.scene === sc && c.caption);
-    if (own.length) {
-      // 컷마다 그 컷에 보이는 것의 이름 (컷이 바뀌면 자막도 바뀜)
-      for (const c of own) ev.push(`Dialogue: 1,${assTime(c.start + 0.05)},${assTime(c.start + c.duration - 0.03)},Caption,,0,0,0,,{\fad(60,60)}${assText(c.caption)}`);
-    } else if (sc.caption) ev.push(`Dialogue: 1,${assTime(s + 0.1)},${assTime(e - 0.05)},Caption,,0,0,0,,${fade}${assText(sc.caption)}`);
-    if (sc.price_tag) {
-      ev.push(`Dialogue: 3,${assTime(s + 0.35)},${assTime(e - 0.1)},Price,,0,0,0,,{\\fad(120,120)\\t(0,180,\\fscx112\\fscy112)\\t(180,320,\\fscx100\\fscy100)}${assText(sc.price_tag)}`);
-    }
-    if (format === 'longform' && sc.chapter) {
-      ev.push(`Dialogue: 2,${assTime(s + 0.2)},${assTime(Math.min(e, s + 3.5))},Chapter,,0,0,0,,${fade}${assText(sc.chapter)}`);
-    }
-  }
+  // 화면 글자 데이터(overlayEvents)를 ASS 자막으로
+  const layer = { hook: 2, label: 2, caption: 1, price: 3, chapter: 2 };
+  const style = { hook: 'Hook', label: 'Label', caption: 'Caption', price: 'Price', chapter: 'Chapter' };
+  const fx = {
+    hook: '{\\fad(100,250)}',
+    label: '{\\fad(80,80)}',
+    caption: '{\\fad(60,60)}',
+    price: '{\\fad(120,120)\\t(0,180,\\fscx112\\fscy112)\\t(180,320,\\fscx100\\fscy100)}',
+    chapter: '{\\fad(150,150)}',
+  };
+  const ev = events.map((e) => `Dialogue: ${layer[e.type]},${assTime(e.start)},${assTime(e.end)},${style[e.type]},,0,0,0,,${fx[e.type]}${assText(e.text)}`);
   return [...header, ...ev, ''].join('\n');
 }
 
