@@ -179,17 +179,40 @@ export function splitCuts(scenes, mediaById) {
       if (m) list.push({ shot: x.shot, media: m, clip_start: x.clip_start || 0, caption: x.caption || '' });
     }
     // 같은 자료(영상)의 컷이 연달아 오면 한 컷처럼 보이므로 번갈아 놓는다 (장면 첫 컷은 그대로)
-    list = interleave(list, cuts.at(-1)?.media.id);
+    // 단, 구절과 컷을 맞출 수 있으면 순서를 바꾸지 않는다 (대본이 컷 순서대로 말하므로)
+    if (!phraseBounds(sc, list.length)) list = interleave(list, cuts.at(-1)?.media.id);
     const n = Math.max(1, Math.min(list.length, Math.floor(sc.duration / MIN_CUT)));
     const totalFrames = Math.round(sc.duration * FPS);
+    const bounds = phraseBounds(sc, n);
     let used = 0;
     for (let i = 0; i < n; i++) {
-      const f = i === n - 1 ? totalFrames - used : Math.round(totalFrames / n);
+      const f = i === n - 1 ? totalFrames - used : bounds ? Math.round(bounds[i] * FPS) - used : Math.round(totalFrames / n);
       cuts.push({ ...list[i], scene: sc, start: sc.start + used / FPS, duration: f / FPS });
       used += f;
     }
   }
   return cuts;
+}
+
+/**
+ * 말과 화면 맞추기: 나레이션 구절(쉼표·마침표로 나눔) 수가 컷 수와 같으면, 컷이 바뀌는 시각을
+ * 각 구절이 끝나는 시각에 맞춘다 (자막도 같은 글자 비율로 나뉘므로 "된장찌개" 자막이 찌개 컷 위에 뜬다).
+ * 맞출 수 없으면 null (컷을 같은 길이로 나눔)
+ * @returns {number[]|null} 장면 시작 기준, 컷 i 가 끝나는 시각(초)
+ */
+function phraseBounds(sc, n) {
+  if (n < 2 || !sc.voice) return null;
+  const clauses = String(sc.narration || '').split(/(?<=[.,!?~…])\s*/).map((x) => x.replace(/\s/g, '').replace(/[.,!?~…]+$/, '')).filter(Boolean);
+  if (clauses.length !== n) return null;
+  const total = clauses.reduce((a, c) => a + c.length, 0) || 1;
+  const lead = sc.lead ?? VOICE_LEAD;
+  const bounds = [];
+  let acc = 0;
+  for (const c of clauses.slice(0, -1)) { acc += c.length; bounds.push(lead + sc.voice.duration * (acc / total)); }
+  // 컷이 너무 짧아지면(0.7초 미만) 같은 길이로
+  const all = [0, ...bounds, sc.duration];
+  for (let i = 1; i < all.length; i++) if (all[i] - all[i - 1] < 0.7) return null;
+  return [...bounds, sc.duration];
 }
 
 function interleave(list, prevMedia) {

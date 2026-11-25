@@ -80,7 +80,7 @@ export async function selfReview(project, plan, onStep = () => {}) {
     onStep(`자체 검증: ${PLATFORMS[k].label} 보완 중 (${++done}/${toFix.length})`, done / (toFix.length + 1));
     const fixes = [
       ...(byKey[k]?.fixes || []),
-      ...(before[k]?.issues || []).filter((i) => i.level === 'error' || i.msg.startsWith('예상 길이') || i.msg.startsWith('훅')).map((i) => i.msg),
+      ...(before[k]?.issues || []).filter((i) => i.level === 'error' || i.msg.startsWith('예상 길이') || i.msg.startsWith('훅') || i.msg.startsWith('컷 수와')).map((i) => i.msg),
     ];
     if (!fixes.length) continue;
     try {

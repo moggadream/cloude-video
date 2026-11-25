@@ -104,6 +104,13 @@ export function lintOutput(key, out, plan, project) {
     if (key !== 'longform') {
       const silent = out.scenes.map((s, i) => (String(s.narration || '').trim() ? 0 : i + 1)).filter(Boolean);
       if (silent.length) add('error', `나레이션이 없는 장면: ${silent.join(', ')}번. 숏폼은 끝까지 쉬지 않고 말한다 (마지막 장면도 팁 한마디)`);
+      // 말과 화면 맞추기: 컷이 여러 개인 장면은 구절 수 = 컷 수여야 컷이 구절 끝에서 바뀐다
+      const off = out.scenes.map((s, i) => {
+        const n = 1 + (s.extra_shots || []).length;
+        const c = String(s.narration || '').split(/(?<=[.,!?~…])s*/).filter((x) => x.replace(/[s.,!?~…]/g, '')).length;
+        return n >= 2 && c !== n ? `${i + 1}번(컷 ${n}개, 구절 ${c}개)` : '';
+      }).filter(Boolean);
+      if (off.length) add('warn', `컷 수와 나레이션 구절 수가 다른 장면: ${off.join(', ')}. 컷마다 그 컷에 보이는 것을 한 구절씩 (쉼표·마침표로 나눔)`);
       // 끝은 볼 사람에게 쓸모 있는 팁 한마디 (저장·방문으로 이어짐). 사실만 말하고 끝나면 영상이 뚝 끊긴 느낌
       const last = String(out.scenes.at(-1)?.narration || '');
       if (last && !/[?？]\s*$/.test(last) && !/(세요|하면|면 돼|챙기|추천|꼭|피해|예약|팁|가 좋|게 좋|드셔|시키|노려|가시|오세|기억|저장|조심|주의|챙겨|가면|전에|마세요)/.test(last)) {
@@ -171,11 +178,12 @@ export function lintOutput(key, out, plan, project) {
         // 첫 컷은 더 엄격하게: 인기 쇼츠의 첫 컷은 1.3~2.5초 (우리 릴스는 5.2초였음)
         const limit = i === 0 ? hi * 1.25 : hi * 1.4;
         if (perCut > limit) {
-          if (i === 0) firstSlow = true;
+          // 첫 장면·마지막 장면(사진 한 장인 경우가 많음)이 오래 멈춰 있으면 바로 이탈 → 오류
+          if (i === 0 || i === out.scenes.length - 1) firstSlow = true;
           slow.push(`${i + 1}번(${chars}자, 컷 ${cutsN}개 → 공백 빼고 ${Math.max(6, Math.floor(((i === 0 ? hi * 1.1 : hi * 1.2) * cutsN - 0.9) * 6))}자 이하)`);
         }
       });
-      if (slow.length) add(slow.length >= 2 || firstSlow ? 'error' : 'warn', `컷이 기준(${hi}초)보다 오래 머무는 장면: ${slow.join(', ')}. 나레이션을 줄이거나 그 비트의 컷(extra_shots)을 늘린다${firstSlow ? '. 특히 첫 장면은 2초 안에 다음 컷으로' : ''}`);
+      if (slow.length) add(slow.length >= 2 || firstSlow ? 'error' : 'warn', `컷이 기준(${hi}초)보다 오래 머무는 장면: ${slow.join(', ')}. 나레이션을 줄이거나 그 비트의 컷(extra_shots)을 늘린다${firstSlow ? '. 특히 첫 장면은 2초 안에 다음 컷으로, 마지막 장면(간판·외관 한 컷)은 팁 한마디만 짧게' : ''}`);
     }
   }
   // 장소 이름 핵심(연도·○·공백 제외): "2026 ○○강 억새축제" → "강억새축제"

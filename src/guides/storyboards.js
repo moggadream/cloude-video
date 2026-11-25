@@ -283,7 +283,7 @@ export function scoreStoryboard(sb, concept, shotInfo) {
   // 눈에 바로 띄는 문제는 점수와 상관없이 다시 짜게 한다 (기준 75점 미만으로)
   const gate = [];
   if (sameRun >= 2) gate.push('같은 영상 연속');
-  if (near.length >= 2) gate.push('같은 화면 반복');
+  if (near.length) gate.push('같은 화면 반복'); // 1번이라도 (완성본 화면 모음에서 바로 티 남)
   if (fitN && misfit.length / fitN > 0.25) gate.push('구도 안 맞는 컷 많음');
   if (missing.length) gate.push('꼭 비트 빠짐');
   // 쓸 수 있는 장면이 있는데 컷이 적거나 영상이 너무 짧으면 다시 (인기 쇼츠는 컷이 많다)
