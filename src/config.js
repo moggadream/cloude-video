@@ -56,6 +56,8 @@ export const config = {
     // 드라이브 웹에서 "결과" 폴더를 열었을 때의 주소 (텔레그램 버튼 링크)
     resultUrl: env('DRIVE_RESULT_URL'),
   },
+  // 릴스 형식: music(말 없이 음악 + 컷마다 작은 글자, 기본) | voice(쇼츠처럼 나레이션)
+  reelsStyle: env('REELS_STYLE', 'music'),
   tts: {
     // 나레이션: auto(ElevenLabs 키 → 무료 edge 음성 → 없음) | elevenlabs | edge | off
     provider: env('TTS_PROVIDER', 'auto'),
@@ -117,3 +119,9 @@ export const features = {
   get voice() { return Boolean(config.elevenlabs.apiKey || config.azure.key) || config.tts.provider === 'edge'; },
   get aiMusic() { return Boolean(config.elevenlabs.apiKey) && config.elevenlabs.music; },
 };
+
+/**
+ * 말 없는 "음악 + 글자" 형식인지 (인스타 인기 맛집 릴스의 절반, docs/research/instagram-reels.md).
+ * 릴스가 기본으로 이 형식. 릴스도 나레이션을 넣으려면 .env 에 REELS_STYLE=voice
+ */
+export const musicOnly = (key) => key === 'reels' && config.reelsStyle !== 'voice';

@@ -1,6 +1,7 @@
 // 규칙 검사 (AI 없이 바로): 길이·개수·금지 표현·근거 없는 가격 등
 // 결과: { score: 0~100, issues: [{ level: 'error'|'warn', msg }] }
 import { storyboardFor } from '../guides/storyboards.js';
+import { musicOnly } from '../config.js';
 
 export const AI_PHRASES = [
   '소개합니다', '소개해 드릴게요', '알아보겠습니다', '알아볼까요', '살펴볼까요', '살펴보겠습니다',
@@ -86,7 +87,9 @@ export function lintOutput(key, out, plan, project) {
 
   // 4) 플랫폼별
   if (L.sec) {
-    const sec = estimateSec(out.scenes);
+    const silent = musicOnly(key); // 말 없는 음악+글자 릴스: 나레이션 규칙 대신 컷 글자 검사
+    const cutCount = out.scenes.reduce((a, s) => a + 1 + (s.extra_shots || []).length, 0);
+    const sec = silent ? cutCount * 1.25 : estimateSec(out.scenes);
     if (sec < L.sec[0] || sec > L.sec[1]) add('warn', `예상 길이 ${Math.round(sec)}초 (권장 ${L.sec[0]}~${L.sec[1]}초)`);
     const usesBoard = out.scenes.some((s) => (s.extra_shots || []).length); // 스토리보드(빠른 컷)를 쓰면 장면 수 대신 컷 수가 기준
     if (!usesBoard && (out.scenes.length < L.scenes[0] || out.scenes.length > L.scenes[1])) add('warn', `장면 ${out.scenes.length}개 (권장 ${L.scenes[0]}~${L.scenes[1]}개)`);
@@ -101,7 +104,28 @@ export function lintOutput(key, out, plan, project) {
       add('warn', '첫 나레이션이 상황 설명(누구랑·언제)으로 시작. 첫마디는 의견·반전·가격으로 ("이 가격에 이게 나와?")');
     }
     // 인기 리뷰 쇼츠는 영상의 86~97% 동안 말한다 → 숏폼에서 나레이션 없는 장면은 오류 (docs/evals/2026-11-24-reference-shorts.md)
-    if (key !== 'longform') {
+    if (silent) {
+      // 컷마다 그 컷에 보이는 것 한 줄 (말이 없으니 글자가 유일한 정보)
+      const missing = [];
+      const long = [];
+      out.scenes.forEach((s, i) => {
+        const n = 1 + (s.extra_shots || []).length;
+        const caps = n >= 2 ? (s.cut_captions?.length ? s.cut_captions : [s.cut_caption, ...(s.extra_shots || []).map((x) => x?.caption)]) : [s.caption];
+        for (let j = 0; j < n; j++) {
+          const c = String(caps[j] || (n >= 2 && j === 0 ? s.caption : '') || '').trim();
+          if (!c) missing.push(`${i + 1}번 장면 ${j + 1}번째 컷`);
+          else if (c.length > 14) long.push(`"${c}"`);
+        }
+      });
+      if (missing.length) add(missing.length >= 3 ? 'error' : 'warn', `화면 글자가 없는 컷: ${missing.slice(0, 5).join(', ')}. 말 없는 릴스는 컷마다 그 컷에 보이는 것 한 줄 (4~12자)`);
+      if (long.length) add('warn', `컷 글자가 길다 (14자 넘음, 1초 안에 못 읽음): ${long.slice(0, 3).join(', ')}`);
+      if (out.scenes.some((s) => String(s.narration || '').trim())) add('warn', '말 없는 릴스인데 나레이션이 있음 (목소리는 넣지 않으니 비운다)');
+      if (plan.storyboard?.beats?.length) {
+        const minSec = storyboardFor(plan.concept).totalSec[0];
+        if (sec < minSec * 0.75) add('error', `컷이 ${cutCount}개뿐이라 영상이 ≈${Math.round(sec)}초 (기준 ${Math.round(minSec * 0.75)}초 이상). 스토리보드 컷을 빠짐없이 쓴다`);
+      }
+    }
+    if (key !== 'longform' && !silent) {
       const silent = out.scenes.map((s, i) => (String(s.narration || '').trim() ? 0 : i + 1)).filter(Boolean);
       if (silent.length) add('error', `나레이션이 없는 장면: ${silent.join(', ')}번. 숏폼은 끝까지 쉬지 않고 말한다 (마지막 장면도 팁 한마디)`);
       // 말과 화면 맞추기: 컷이 여러 개인 장면은 구절 수 = 컷 수여야 컷이 구절 끝에서 바뀐다
@@ -120,7 +144,7 @@ export function lintOutput(key, out, plan, project) {
     const norm = (x) => String(x || '').replace(/[\s\n.,!?~·]/g, '');
     const h = norm(out.hook);
     const n0 = norm(out.scenes[0]?.narration);
-    if (h.length >= 4 && (n0.includes(h) || (h.length >= 8 && n0.includes(h.slice(0, 8))))) add('warn', '훅(화면 제목)과 첫 나레이션이 같은 문장 (첫 나레이션은 다른 말로)');
+    if (!silent && h.length >= 4 && (n0.includes(h) || (h.length >= 8 && n0.includes(h.slice(0, 8))))) add('warn', '훅(화면 제목)과 첫 나레이션이 같은 문장 (첫 나레이션은 다른 말로)');
     const shots = out.scenes.map((s) => s.shot);
     if (key !== 'longform' && new Set(shots).size < shots.length) add('warn', '같은 장면을 두 번 사용');
     const bad = new Set((plan.shots || []).filter((s) => s.quality === 'bad').map((s) => s.ref));
@@ -155,7 +179,7 @@ export function lintOutput(key, out, plan, project) {
     }
     // 스토리보드 컷 길이: 나레이션이 길면 컷이 늘어져 기준(인기 쇼츠)보다 느려진다 → 오류로 보고 자동 보완
     // 스토리보드 기준 길이보다 짧은 영상 (나레이션이 너무 짧음) → 오류로 보고 자동 보완
-    if (key !== 'longform' && plan.storyboard?.beats?.length) {
+    if (key !== 'longform' && !silent && plan.storyboard?.beats?.length) {
       const minSec = storyboardFor(plan.concept).totalSec[0];
       const chars = out.scenes.reduce((a, s) => a + String(s.narration || '').replace(/\s/g, '').length, 0);
       // 숏폼 목소리는 +18% 빨라 실제로 1초에 7~8자 (11/25 측정: 67자 5장면 → 10.1초) → 짧은 쪽은 빠르게 잡는다
@@ -167,7 +191,7 @@ export function lintOutput(key, out, plan, project) {
       const target = Math.max(minSec, Math.min(tpl.totalSec[1], cutsN * ((tpl.cutSec[0] + tpl.cutSec[1]) / 2)));
       if (est > target * 1.1) add(est > target * 1.2 ? 'error' : 'warn', `컷 ${cutsN}개에 나레이션이 길어 컷이 느려짐 (≈${Math.round(est)}초, 목표 ${Math.round(target)}초 → 나레이션을 공백 빼고 ${Math.round((target - out.scenes.length * 0.25) * 7.5)}자 안팎으로)`);
     }
-    if (key !== 'longform' && plan.storyboard?.beats?.length) {
+    if (key !== 'longform' && !silent && plan.storyboard?.beats?.length) {
       const hi = storyboardFor(plan.concept).cutSec[1];
       const slow = [];
       let firstSlow = false;

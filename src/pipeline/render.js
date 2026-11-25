@@ -2,7 +2,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { config } from '../config.js';
+import { config, musicOnly } from '../config.js';
 import { ffmpeg, audioDuration, concatLine, videoColorFilter } from './media.js';
 import { narrate, makeMusic } from './audio.js';
 import { renderOverlay } from './overlay.js';
@@ -24,6 +24,10 @@ const VOICE_TAIL = 0.45; // 나레이션이 끝난 뒤 여유
 const SHORT_LEAD = 0.08;
 const SHORT_TAIL = 0.15;
 const leadOf = (fmt) => (fmt.short ? SHORT_LEAD : VOICE_LEAD);
+// 음악+글자 릴스: 컷 길이를 박자(120BPM = 0.5초)에 맞춘다. 인기 릴스 평균 컷 1.2초
+// 영상 컷 1.5초(3박), 사진 컷 1.0초(2박), 마지막 컷(간판·외관, "여기가 어디")은 1박 더
+const BEAT = 0.5;
+const MUSIC_CUT = { video: 3 * BEAT, photo: 2 * BEAT };
 
 /** 음성이 없을 때 읽는 속도로 장면 길이를 추정 (한국어 초당 약 6자) */
 const estimateSeconds = (text) => (text ? text.replace(/\s/g, '').length / 6 + 0.9 : 0);
@@ -47,9 +51,21 @@ export async function renderVideo({ format, script, project, dir, musicPrompt, o
   // 1) 장면별 나레이션과 길이 결정
   const scenes = [];
   let total = 0;
-  for (const s of script.scenes) {
+  const silent = musicOnly(format);
+  for (const [si, s] of script.scenes.entries()) {
     const m = mediaById.get(s.media_id);
     if (!m) continue;
+    if (silent) {
+      // 말 없이 음악 + 글자: 장면 길이 = 컷마다 박자에 맞춘 길이의 합
+      const kinds = [m, ...(s.extra_shots || []).map((x) => mediaById.get(x.media_id)).filter(Boolean)].map((x) => x.kind);
+      const cutDur = kinds.map((k) => MUSIC_CUT[k] || MUSIC_CUT.photo);
+      if (si === script.scenes.length - 1) cutDur[cutDur.length - 1] += BEAT;
+      const dur = cutDur.reduce((a, b) => a + b, 0);
+      if (total + dur > fmt.maxTotal && scenes.length) break;
+      scenes.push({ ...s, narration: '', media: m, voice: null, cutDur, lead: 0, start: total, duration: dur });
+      total += dur;
+      continue;
+    }
     const voice = await narrate(s.narration, path.join(dir, 'work'), fmt.short ? { rate: config.tts.shortRate } : undefined);
     let dur = voice
       ? voice.duration + leadOf(fmt) + (fmt.short ? SHORT_TAIL : VOICE_TAIL)
@@ -93,7 +109,7 @@ export async function renderVideo({ format, script, project, dir, musicPrompt, o
   onProgress(0.75);
 
   // 5) 배경음악
-  const music = await makeMusic(musicPrompt, total, path.join(dir, 'work'));
+  const music = await makeMusic(musicPrompt, total, path.join(dir, 'work'), { beat: silent });
   onProgress(0.8);
 
   // 6) 자막 파일
@@ -161,6 +177,7 @@ export async function renderVideo({ format, script, project, dir, musicPrompt, o
     // 제작 문서(대본·스토리보드)용: 장면 시각, 화면 글자, 말하는 시간 비율
     scenes: scenes.map((s) => ({ t: Math.round(s.start * 100) / 100, d: Math.round(s.duration * 100) / 100 })),
     texts: events,
+    style: silent ? 'music' : 'voice',
     speechRatio: hasVoice ? Math.round((100 * scenes.reduce((a, s) => a + (s.voice?.duration || 0), 0)) / total) : null,
     usedMedia: [...new Set(scenes.map((s) => s.media_id))],
     renderedAt: new Date().toISOString(),
@@ -180,10 +197,10 @@ export function splitCuts(scenes, mediaById) {
     }
     // 같은 자료(영상)의 컷이 연달아 오면 한 컷처럼 보이므로 번갈아 놓는다 (장면 첫 컷은 그대로)
     // 단, 구절과 컷을 맞출 수 있으면 순서를 바꾸지 않는다 (대본이 컷 순서대로 말하므로)
-    if (!phraseBounds(sc, list.length)) list = interleave(list, cuts.at(-1)?.media.id);
-    const n = Math.max(1, Math.min(list.length, Math.floor(sc.duration / MIN_CUT)));
+    if (!sc.cutDur && !phraseBounds(sc, list.length)) list = interleave(list, cuts.at(-1)?.media.id);
+    const n = sc.cutDur ? list.length : Math.max(1, Math.min(list.length, Math.floor(sc.duration / MIN_CUT)));
     const totalFrames = Math.round(sc.duration * FPS);
-    const bounds = phraseBounds(sc, n);
+    const bounds = sc.cutDur ? sc.cutDur.map((_, i) => sc.cutDur.slice(0, i + 1).reduce((a, b) => a + b, 0)) : phraseBounds(sc, n);
     let used = 0;
     for (let i = 0; i < n; i++) {
       const f = i === n - 1 ? totalFrames - used : bounds ? Math.round(bounds[i] * FPS) - used : Math.round(totalFrames / n);

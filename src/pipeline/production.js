@@ -37,6 +37,7 @@ export async function writeProductionDoc({ project, key, dir }) {
   const beatOf = new Map();
   if (fmt.short) for (const b of plan.storyboard?.beats || []) for (const s of b.shots || []) if (!beatOf.has(s)) beatOf.set(s, b);
   const role = new Map(tpl.beats.map((b) => [b.id, b.role.split(/[:(]/)[0].trim()]));
+  const music = v.style === 'music'; // 말 없는 음악+글자 릴스
   const texts = v.texts || [];
   const textAt = (a, b) => texts.filter((e) => e.start < b && e.end > a && e.type !== 'place');
   const scenes = v.scenes || [];
@@ -58,7 +59,7 @@ export async function writeProductionDoc({ project, key, dir }) {
     <div class="fr">구도: ${esc(FRAMINGS[shot.framing] || shot.framing || '-')}</div>
     <p class="desc">${esc(shot.description || c.shot)}</p>
     ${on.length ? `<div class="on">${on.map((e) => `<span class="t-${e.type}">${esc(e.text).replace(/\n/g, ' / ')}</span>`).join('')}</div>` : ''}
-    ${si >= 0 ? `<div class="sc">장면 ${si + 1} 나레이션</div>` : ''}
+    ${si >= 0 ? `<div class="sc">장면 ${si + 1}${music ? '' : ' 나레이션'}</div>` : ''}
   </div>
 </article>`);
   }
@@ -70,7 +71,7 @@ export async function writeProductionDoc({ project, key, dir }) {
     const screen = [sc.label && `이름표 "${sc.label}"`, sc.price_tag && `가격 "${sc.price_tag}"`, sc.cut_caption && `컷 자막 "${sc.cut_caption}"`,
       ...(sc.extra_shots || []).filter((x) => x.caption).map((x) => `컷 자막 "${x.caption}"`), sc.caption && `장면 자막 "${sc.caption}"`].filter(Boolean);
     return `<tr><td class="n">${i + 1}</td><td class="tc">${s.d ? `${clock(s.t)}<br><small>${s.d.toFixed(1)}초</small>` : ''}</td>
-<td class="narr">${esc(sc.narration)}${screen.length ? `<div class="scr">${screen.map(esc).join(' · ')}</div>` : ''}</td><td class="cuts">${cutNos.map((n) => `<span class="pill">${n}</span>`).join('')}</td></tr>`;
+<td class="narr">${music ? '<span class="scr">(말 없음 · 음악)</span>' : esc(sc.narration)}${screen.length ? `<div class="scr">${screen.map(esc).join(' · ')}</div>` : ''}</td><td class="cuts">${cutNos.map((n) => `<span class="pill">${n}</span>`).join('')}</td></tr>`;
   }).join('\n');
 
   // 3) 인기 영상 기준과 비교
@@ -82,6 +83,7 @@ export async function writeProductionDoc({ project, key, dir }) {
     ['컷 수', `${v.cuts.length}컷`, `${tpl.minCuts || 6}컷 이상`, v.cuts.length >= (tpl.minCuts || 6)],
     ['컷 하나 평균', `${v.avgCut}초`, `${tpl.cutSec.join('~')}초`, v.avgCut <= tpl.cutSec[1] * 1.15],
     ['첫 컷', `${first?.toFixed(1)}초`, '2.5초 이하', first <= 2.5],
+    ...(music ? [['형식', '말 없이 음악 + 컷 글자', '인기 맛집 릴스 절반이 이 형식', true], ['컷 하나 평균 (릴스)', `${v.avgCut}초`, '0.7~1.6초 (가운데 1.2초)', v.avgCut <= 1.6]] : []),
     ...(v.speechRatio != null ? [['말하는 시간', `${v.speechRatio}%`, '86~97%', v.speechRatio >= 80]] : []),
     ['같은 자료 연속', `${v.cuts.filter((c, i) => i && media(c.shot) === media(v.cuts[i - 1].shot)).length}번`, '0번', !v.cuts.some((c, i) => i && media(c.shot) === media(v.cuts[i - 1].shot))],
   ];
@@ -111,7 +113,7 @@ th{font-size:13px;color:var(--mute);font-weight:600}td.n{width:34px;font-weight:
 .ref a{color:var(--acc)}
 </style></head><body><main>
 <h1>${esc(plan.place_name || '')} — ${esc(fmt.label)} 대본·스토리보드</h1>
-<p class="sub">${esc(tpl.form)} · ${v.duration}초 · ${v.cuts.length}컷 · 장면(나레이션) ${scenes.length || script.scenes.length}개${sb?.score != null && fmt.short ? ` · 스토리보드 점수 ${sb.score}점` : ''}</p>
+<p class="sub">${esc(tpl.form)} · ${v.duration}초 · ${v.cuts.length}컷 · ${music ? '음악+글자 · 장면' : '장면(나레이션)'} ${scenes.length || script.scenes.length}개${sb?.score != null && fmt.short ? ` · 스토리보드 점수 ${sb.score}점` : ''}</p>
 ${script.hook ? `<div class="hook">${esc(script.hook)}</div>` : ''}
 
 <h2>1. 인기 영상 기준과 비교</h2>
@@ -119,7 +121,7 @@ ${ref ? `<p class="ref">기준 영상: <a href="${esc(ref.url)}">${esc(ref.title
 <table><tr><th>항목</th><th>이 영상</th><th>기준</th><th></th></tr>${checkRows}</table>
 
 <h2>2. 대본</h2>
-<table><tr><th>#</th><th>시간</th><th>나레이션 (말) · 화면 글자</th><th>컷</th></tr>
+<table><tr><th>#</th><th>시간</th><th>${music ? '화면 글자 (말 없음)' : '나레이션 (말) · 화면 글자'}</th><th>컷</th></tr>
 ${rows}</table>
 
 <h2>3. 스토리보드 (컷별 화면)</h2>

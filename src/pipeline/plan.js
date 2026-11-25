@@ -1,6 +1,7 @@
 // 대본·글 만들기: ① 자료 분석 → ② 플랫폼별 스킬로 각각 작성 → (필요하면) ③ 수정 요청 반영
 import path from 'node:path';
 import { z } from 'zod';
+import { musicOnly } from '../config.js';
 import { generate, aiBackend } from '../ai/index.js';
 import { loadSkill, loadStyleSamples, recentFeedback } from '../ai/skills.js';
 import { smallJpegBase64 } from './media.js';
@@ -296,6 +297,19 @@ function storyboardText(plan, key) {
     '- label 은 스토리보드의 이름표를 그대로. 이름표가 없는 비트는 빈칸.',
     '- 컷이 2개 이상인 장면은 cut_captions 에 컷마다 그 컷에 보이는 것의 짧은 이름(메뉴·상품·장소, 10자 안팎)을 적는다. 인기 쇼츠는 컷이 바뀌면 이름도 바뀐다 (한 컷에 한 정보). 이때 caption 은 비워도 된다.',
   ];
+  if (musicOnly(key)) {
+    // 말 없는 음악+글자 릴스: 나레이션 규칙 대신 컷마다 작은 글자
+    const at = lines.findIndex((l) => l.includes('나레이션 전체 분량'));
+    lines.splice(at, lines.length - at,
+      '- **이 영상은 말이 없다 (음악 + 글자)**. 인스타 인기 맛집 릴스의 절반이 이 형식. 모든 장면의 narration 은 빈 문자열("").',
+      '- 컷 길이는 프로그램이 박자에 맞춰 정한다 (영상 컷 1.5초, 사진 컷 1초). 그러니 컷 수가 곧 영상 길이: 스토리보드 컷을 빠짐없이 쓴다.',
+      '- **컷마다 화면 글자 한 줄**: 컷이 1개인 장면은 caption, 컷이 2개 이상이면 cut_captions 에 컷마다 (shot, extra_shots 순서). 각 **4~12자**, 그 컷에 보이는 것 + 맛·양·가격 한마디 ("두툼한 생삼겹", "육즙 가둔 겉바속촉"). 보는 사람이 1초 안에 읽는다.',
+      '- hook(첫 화면 위쪽 글자)은 친구 태그 한 줄이나 짧은 반전: "@고기 사줄 친구 태그", "여기 웨이팅 이유". 12자 안팎.',
+      '- 마지막 컷 글자는 "여기가 어디" 정보: 가게 이름이나 동네·역 (예: "○○역 3번 출구 앞"). 가격·주차 같은 자세한 정보는 캡션(description)에.',
+      '- 스토리보드에 없는 컷을 더하지 않는다. 같은 영상에서 8초 안쪽이거나 구도가 같은 장면은 함께 쓰지 않는다.',
+      '- label 은 스토리보드의 이름표를 그대로. 이름표가 없는 비트는 빈칸.',
+    );
+  }
   if (key !== 'shorts') lines.push('- 쇼츠와 같은 스토리보드를 쓰되, 첫 컷은 hook 비트의 다른 후보로 바꾸거나 비트 안의 컷 순서를 바꿔 겹치지 않게 해도 된다. 비트 순서는 지킨다.');
   return lines.join('\n');
 }
@@ -688,7 +702,7 @@ export function finalizePlan(plan, project, only = null) {
           extra_shots: extras.slice(0, 6),
           cut_caption: sc.cut_caption ?? (extras.length ? caps[0] || '' : ''),
           label: String(sc.label || '').trim(),
-          narration: String(sc.narration || '').trim(),
+          narration: musicOnly(k) ? '' : String(sc.narration || '').trim(),
           caption: String(sc.caption || '').trim(),
           price_tag: firstPrice(sc.price_tag),
           chapter: String(sc.chapter || '').trim(),

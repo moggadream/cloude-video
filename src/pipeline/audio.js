@@ -129,7 +129,7 @@ export async function narrate(text, workDir, { rate = config.tts.rate } = {}) {
  * 배경음악을 만든다.
  * ElevenLabs 키가 있으면 AI 작곡, 없거나 실패하면 내장 임시 음악(합성음)을 쓴다.
  */
-export async function makeMusic(prompt, seconds, workDir) {
+export async function makeMusic(prompt, seconds, workDir, { beat = false } = {}) {
   const len = Math.ceil(Math.min(Math.max(seconds + 2, 10), 300));
   if (features.aiMusic) {
     const file = path.join(workDir, `music_ai_${len}.mp3`);
@@ -147,12 +147,12 @@ export async function makeMusic(prompt, seconds, workDir) {
       console.warn('[music] AI 음악 생성 실패, 임시 음악으로 대체:', err.message);
     }
   }
-  return { file: await fallbackMusic(len, workDir), source: 'builtin' };
+  return { file: await fallbackMusic(len, workDir, beat), source: 'builtin' };
 }
 
 /** 키 없이 쓸 수 있는 부드러운 코드 진행 (C - Am - F - G) */
-async function fallbackMusic(len, workDir) {
-  const file = path.join(workDir, `music_builtin_${len}.m4a`);
+async function fallbackMusic(len, workDir, beat = false) {
+  const file = path.join(workDir, `music_builtin_${beat ? 'beat_' : ''}${len}.m4a`);
   if (await exists(file)) return file;
   const chords = [
     [261.63, 329.63, 392.0], // C
@@ -167,7 +167,10 @@ async function fallbackMusic(len, workDir) {
     .map((c, i) => `eq(${idx},${i})*${c[n]}`)
     .join('+');
   const env = `(0.55+0.45*pow(sin(PI*mod(t,0.5)/0.5),2))`;
-  const expr = `${env}*(0.10*sin(2*PI*(${pick(0)})*t)+0.07*sin(2*PI*(${pick(1)})*t)+0.06*sin(2*PI*(${pick(2)})*t)+0.05*sin(PI*(${pick(0)})*t))`;
+  // 음악+글자 릴스: 0.5초마다 북소리(킥)와 반 박자 뒤 찰랑 소리 → 박자에 맞춘 컷 전환이 들린다
+  const u = 'mod(t,0.5)';
+  const kick = beat ? `+0.42*sin(2*PI*(48+110*exp(-28*${u}))*${u})*exp(-10*${u})+0.05*(random(0)*2-1)*exp(-40*mod(t+0.25,0.5))` : '';
+  const expr = `${env}*(0.10*sin(2*PI*(${pick(0)})*t)+0.07*sin(2*PI*(${pick(1)})*t)+0.06*sin(2*PI*(${pick(2)})*t)+0.05*sin(PI*(${pick(0)})*t))${kick}`;
   await ffmpeg([
     '-f', 'lavfi', '-i', `aevalsrc='${expr}':s=44100:d=${len}`,
     '-af', `lowpass=f=2500,aecho=0.8:0.7:120:0.25,afade=t=in:d=1,afade=t=out:st=${len - 2}:d=2`,
