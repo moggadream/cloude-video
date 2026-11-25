@@ -5,6 +5,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { ffmpeg } from './media.js';
 import { FORMATS } from './render.js';
+import { baseKey } from '../config.js';
 import { storyboardFor, FRAMINGS } from '../guides/storyboards.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -29,7 +30,7 @@ export async function writeProductionDoc({ project, key, dir }) {
   const script = plan[key];
   const v = project.outputs?.[key]?.video;
   if (!script || !v?.cuts?.length) return null;
-  const fmt = FORMATS[key];
+  const fmt = FORMATS[baseKey(key)];
   const outDir = path.join(dir, 'out');
   const tpl = storyboardFor(plan.concept);
   const shotBy = new Map((plan.shots || []).map((s) => [s.ref, s]));

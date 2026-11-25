@@ -16,7 +16,7 @@ import { lintPlan, lintOutput } from './lint.js';
 import { exportToDrive } from '../drive.js';
 import { notify } from '../notify.js';
 import { bus } from '../events.js';
-import { config } from '../config.js';
+import { config, baseKey } from '../config.js';
 
 export const OUTPUT_KEYS = PLATFORM_KEYS;
 export const OUTPUT_LABELS = Object.fromEntries(PLATFORM_KEYS.map((k) => [k, PLATFORMS[k].label]));
@@ -72,7 +72,7 @@ export async function processProject(id, opts = {}) {
     const weight = { shorts: 0.1, reels: 0.08, tiktok: 0.08, longform: 0.24, carousel: 0.05 };
     let base = 0.42;
     for (const key of RENDER_KEYS) {
-      const w = weight[key] || 0.05;
+      const w = weight[baseKey(key)] || 0.05;
       const label = `${PLATFORMS[key].label} 만드는 중`;
       await setStep(id, label, base);
       try {

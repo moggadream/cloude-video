@@ -56,8 +56,8 @@ export const config = {
     // 드라이브 웹에서 "결과" 폴더를 열었을 때의 주소 (텔레그램 버튼 링크)
     resultUrl: env('DRIVE_RESULT_URL'),
   },
-  // 릴스 형식: music(말 없이 음악 + 컷마다 작은 글자, 기본) | voice(쇼츠처럼 나레이션)
-  reelsStyle: env('REELS_STYLE', 'music'),
+  // 숏폼(쇼츠·릴스·틱톡)마다 말 없는 판(음악 + 컷마다 글자)도 함께 만들지: on(기본) | off(말 있는 판만)
+  musicVersions: env('MUSIC_VERSIONS', 'on') !== 'off',
   tts: {
     // 나레이션: auto(ElevenLabs 키 → 무료 edge 음성 → 없음) | elevenlabs | edge | off
     provider: env('TTS_PROVIDER', 'auto'),
@@ -121,7 +121,10 @@ export const features = {
 };
 
 /**
- * 말 없는 "음악 + 글자" 형식인지 (인스타 인기 맛집 릴스의 절반, docs/research/instagram-reels.md).
- * 릴스가 기본으로 이 형식. 릴스도 나레이션을 넣으려면 .env 에 REELS_STYLE=voice
+ * 말 없는 "음악 + 글자" 판인지 (shorts_music · reels_music · tiktok_music).
+ * 숏폼마다 말 있는 판과 말 없는 판을 둘 다 만든다: 어느 쪽이 조회수가 터질지 모르니까.
+ * (인스타 인기 맛집 릴스의 절반이 말 없음, 틱톡·쇼츠는 대부분 말 있음 → docs/research/)
  */
-export const musicOnly = (key) => key === 'reels' && config.reelsStyle !== 'voice';
+export const musicOnly = (key) => String(key).endsWith('_music');
+/** 말 없는 판의 플랫폼 (reels_music → reels). 화면 크기·길이 기준·캡션 규칙은 같은 플랫폼 것을 쓴다 */
+export const baseKey = (key) => String(key).replace(/_music$/, '');

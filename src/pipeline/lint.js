@@ -1,7 +1,7 @@
 // 규칙 검사 (AI 없이 바로): 길이·개수·금지 표현·근거 없는 가격 등
 // 결과: { score: 0~100, issues: [{ level: 'error'|'warn', msg }] }
 import { storyboardFor } from '../guides/storyboards.js';
-import { musicOnly } from '../config.js';
+import { musicOnly, baseKey } from '../config.js';
 
 export const AI_PHRASES = [
   '소개합니다', '소개해 드릴게요', '알아보겠습니다', '알아볼까요', '살펴볼까요', '살펴보겠습니다',
@@ -46,7 +46,7 @@ export function knownNumbers(plan, project) {
 /** 이 결과물의 모든 글 (검사용) */
 export function allText(key, out) {
   if (!out) return '';
-  if (['shorts', 'reels', 'tiktok', 'longform'].includes(key)) {
+  if (['shorts', 'reels', 'tiktok', 'longform'].includes(baseKey(key))) {
     return [out.title, out.hook, out.description, ...out.scenes.flatMap((s) => [s.narration, s.caption, s.price_tag])].join('\n');
   }
   if (key === 'carousel') return [out.caption, ...out.slides.flatMap((s) => [s.headline, s.body])].join('\n');
@@ -58,7 +58,7 @@ export function allText(key, out) {
 export function lintOutput(key, out, plan, project) {
   const issues = [];
   const add = (level, msg) => issues.push({ level, msg });
-  const L = LIMITS[key] || {};
+  const L = LIMITS[baseKey(key)] || {};
   const text = allText(key, out);
 
   // 1) AI 티 나는 표현
@@ -87,10 +87,12 @@ export function lintOutput(key, out, plan, project) {
 
   // 4) 플랫폼별
   if (L.sec) {
-    const silent = musicOnly(key); // 말 없는 음악+글자 릴스: 나레이션 규칙 대신 컷 글자 검사
+    const silent = musicOnly(key); // 말 없는 음악+글자 판: 나레이션 규칙 대신 컷 글자 검사
     const cutCount = out.scenes.reduce((a, s) => a + 1 + (s.extra_shots || []).length, 0);
     const sec = silent ? cutCount * 1.25 : estimateSec(out.scenes);
-    if (sec < L.sec[0] || sec > L.sec[1]) add('warn', `예상 길이 ${Math.round(sec)}초 (권장 ${L.sec[0]}~${L.sec[1]}초)`);
+    // 말 없는 판은 박자 컷이라 짧다 (인스타 인기 음악+글자 릴스 9~19초)
+    const range = silent ? [8, 35] : L.sec;
+    if (sec < range[0] || sec > range[1]) add('warn', `예상 길이 ${Math.round(sec)}초 (권장 ${range[0]}~${range[1]}초)`);
     const usesBoard = out.scenes.some((s) => (s.extra_shots || []).length); // 스토리보드(빠른 컷)를 쓰면 장면 수 대신 컷 수가 기준
     if (!usesBoard && (out.scenes.length < L.scenes[0] || out.scenes.length > L.scenes[1])) add('warn', `장면 ${out.scenes.length}개 (권장 ${L.scenes[0]}~${L.scenes[1]}개)`);
     const longCaps = out.scenes.filter((s) => s.caption.length > CAPTION_MAX);
@@ -117,9 +119,9 @@ export function lintOutput(key, out, plan, project) {
           else if (c.length > 14) long.push(`"${c}"`);
         }
       });
-      if (missing.length) add(missing.length >= 3 ? 'error' : 'warn', `화면 글자가 없는 컷: ${missing.slice(0, 5).join(', ')}. 말 없는 릴스는 컷마다 그 컷에 보이는 것 한 줄 (4~12자)`);
+      if (missing.length) add(missing.length >= 3 ? 'error' : 'warn', `화면 글자가 없는 컷: ${missing.slice(0, 5).join(', ')}. 말 없는 판은 컷마다 그 컷에 보이는 것 한 줄 (4~12자)`);
       if (long.length) add('warn', `컷 글자가 길다 (14자 넘음, 1초 안에 못 읽음): ${long.slice(0, 3).join(', ')}`);
-      if (out.scenes.some((s) => String(s.narration || '').trim())) add('warn', '말 없는 릴스인데 나레이션이 있음 (목소리는 넣지 않으니 비운다)');
+      if (out.scenes.some((s) => String(s.narration || '').trim())) add('warn', '말 없는 판인데 나레이션이 있음 (목소리는 넣지 않으니 비운다)');
       if (plan.storyboard?.beats?.length) {
         const minSec = storyboardFor(plan.concept).totalSec[0];
         if (sec < minSec * 0.75) add('error', `컷이 ${cutCount}개뿐이라 영상이 ≈${Math.round(sec)}초 (기준 ${Math.round(minSec * 0.75)}초 이상). 스토리보드 컷을 빠짐없이 쓴다`);

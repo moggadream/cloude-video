@@ -1,5 +1,6 @@
 // 결과물별 제목·본문(올릴 때 붙여넣는 글) 만들기
 import { PLATFORMS, PLATFORM_KEYS } from './plan.js';
+import { baseKey } from '../config.js';
 
 const tagLine = (tags = []) => tags.map((t) => `#${t}`).join(' ');
 
@@ -38,7 +39,7 @@ export function blogMarkdown(blog) {
 /** 한 결과물의 { title, body } */
 export function textFor(key, plan, extra = {}) {
   const s = plan[key];
-  switch (key) {
+  switch (baseKey(key)) {
     case 'shorts': {
       const tags = s.hashtags.includes('shorts') ? s.hashtags : [...s.hashtags, 'shorts'];
       return { title: s.title.slice(0, 100), body: [s.description.trim(), tagLine(tags)].filter(Boolean).join('\n\n') };

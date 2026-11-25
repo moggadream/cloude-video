@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { generate } from '../ai/index.js';
 import { loadSkill } from '../ai/skills.js';
 import { config } from '../config.js';
-import { PLATFORMS, PLATFORM_KEYS, contextText, toShotForm, reviseOutput } from './plan.js';
+import { PLATFORMS, PLATFORM_KEYS, MUSIC_KEYS, contextText, toShotForm, reviseOutput } from './plan.js';
+import { musicOnly, baseKey } from '../config.js';
 import { lintPlan } from './lint.js';
 import { factCheckBlog } from './factcheck.js';
 
@@ -28,7 +29,9 @@ export async function aiReview(project, plan, lint) {
   const lintText = PLATFORM_KEYS.map((k) => `- ${k}: ${lint[k]?.issues.map((i) => `[${i.level}] ${i.msg}`).join(' / ') || '문제 없음'}`).join('\n');
   // 플랫폼 스킬 요약을 함께 주면 "플랫폼 적합" 채점이 정확해진다
   const skills = [];
-  for (const k of PLATFORM_KEYS) skills.push(`### ${k}\n${(await loadSkill(PLATFORMS[k].skill)).slice(0, 1800)}`);
+  // 숏폼 두 판 (말 있음 / 말 없음 = 키 끝 _music): 플랫폼 스킬은 한 번만, 판별 스킬을 따로
+  if (MUSIC_KEYS.length) skills.push(`### 말 있는 판 (shorts·reels·tiktok)\n${(await loadSkill('shortform-voice')).slice(0, 1500)}`, `### 말 없는 판 (*_music)\n${(await loadSkill('shortform-music')).slice(0, 1500)}`);
+  for (const k of PLATFORM_KEYS.filter((x) => !musicOnly(x))) skills.push(`### ${k}\n${(await loadSkill(PLATFORMS[k].skill)).slice(0, 1800)}`);
   return generate({
     system: [await loadSkill('content-review'), '', '# 사람다움 기준', await loadSkill('humanize-korean'), '', '# 플랫폼 스킬 (요약)', ...skills].join('\n'),
     content: [{
@@ -69,7 +72,7 @@ export async function selfReview(project, plan, onStep = () => {}) {
     const lintErr = before[k]?.issues.some((i) => i.level === 'error');
     // 기준: 편집장이 fix 판정 / 총점 미달 / 한 항목이라도 3점 이하 / 규칙 오류 / 짧은 영상 길이 초과
     const low = r && Object.values(r.scores).some((v) => v <= 3);
-    const tooLong = ['shorts', 'reels', 'tiktok'].includes(k) && before[k]?.issues.some((i) => i.msg.startsWith('예상 길이'));
+    const tooLong = ['shorts', 'reels', 'tiktok'].includes(baseKey(k)) && before[k]?.issues.some((i) => i.msg.startsWith('예상 길이'));
     return (r && (r.verdict === 'fix' || r.total < THRESHOLD || low)) || lintErr || tooLong;
   });
 
@@ -94,7 +97,7 @@ export async function selfReview(project, plan, onStep = () => {}) {
   }
   // 숏폼 두 번째 손질: 첫 보완 뒤에도 규칙 오류(너무 짧음·같은 화면·팁 없음 등)가 남으면 그것만 한 번 더
   const mid = lintPlan(current, project, PLATFORM_KEYS);
-  for (const k of ['shorts', 'reels', 'tiktok']) {
+  for (const k of PLATFORM_KEYS.filter((x) => ['shorts', 'reels', 'tiktok'].includes(baseKey(x)))) {
     const left = (mid[k]?.issues || []).filter((i) => i.level === 'error');
     if (!left.length) continue;
     onStep(`자체 검증: ${PLATFORMS[k].label} 한 번 더 손질`, 0.9);

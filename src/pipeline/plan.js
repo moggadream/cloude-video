@@ -1,7 +1,7 @@
 // 대본·글 만들기: ① 자료 분석 → ② 플랫폼별 스킬로 각각 작성 → (필요하면) ③ 수정 요청 반영
 import path from 'node:path';
 import { z } from 'zod';
-import { musicOnly } from '../config.js';
+import { config, musicOnly, baseKey } from '../config.js';
 import { generate, aiBackend } from '../ai/index.js';
 import { loadSkill, loadStyleSamples, recentFeedback } from '../ai/skills.js';
 import { smallJpegBase64 } from './media.js';
@@ -9,7 +9,7 @@ import { speechText } from './speech.js';
 import { FRAMINGS, FRAMING_IDS, storyboardFor, storyboardGuide, scoreStoryboard, autoStoryboard, usableShots } from '../guides/storyboards.js';
 
 export const STORYBOARD_PASS = 75;
-const STORYBOARD_KEYS = ['shorts', 'reels', 'tiktok'];
+const SHORT_BASES = ['shorts', 'reels', 'tiktok'];
 
 const SPEECH_NOTE = '## 영상 속 말소리 (자동 받아쓰기: 직원 설명·안내 방송·촬영자가 한 말)\n'
   + '- 화면에 없는 정보(메뉴 설명, 가격, 영업시간, 추천)가 있으면 사실로 써도 된다. 누가 한 말인지 모르면 "직원분이 ~래요"처럼 단정하지 말고 "~라고 하더라고요"로.\n'
@@ -24,11 +24,19 @@ export const CATEGORIES = {
   other: '기타 장소',
 };
 
-/** 만들 결과물. 순서 = 만드는 순서 = 보고 순서 */
-export const PLATFORMS = {
+/**
+ * 만들 결과물. 순서 = 보고 순서
+ * 숏폼은 플랫폼마다 두 판: 말 있는 판(shortform-voice 스킬) + 말 없는 음악+글자 판(shortform-music 스킬, 키 끝 _music).
+ * 어느 쪽이 조회수가 터질지 모르니 둘 다 만든다. 말 없는 판 끄기: .env 의 MUSIC_VERSIONS=off
+ */
+const SHORTS = {
   shorts: { label: '유튜브 쇼츠', skill: 'youtube-shorts', type: 'video' },
   reels: { label: '인스타 릴스', skill: 'instagram-reels', type: 'video' },
   tiktok: { label: '틱톡', skill: 'tiktok', type: 'video' },
+};
+export const PLATFORMS = {
+  ...Object.fromEntries(Object.entries(SHORTS).map(([k, p]) => [k, { ...p, style: 'shortform-voice' }])),
+  ...(config.musicVersions ? Object.fromEntries(Object.entries(SHORTS).map(([k, p]) => [`${k}_music`, { ...p, label: `${p.label} (말 없음)`, style: 'shortform-music' }])) : {}),
   longform: { label: '유튜브 롱폼', skill: 'youtube-longform', type: 'video' },
   carousel: { label: '인스타 캐러셀', skill: 'instagram-carousel', type: 'carousel' },
   threads: { label: '쓰레드', skill: 'threads', type: 'text' },
@@ -36,6 +44,8 @@ export const PLATFORMS = {
 };
 export const PLATFORM_KEYS = Object.keys(PLATFORMS);
 export const VIDEO_KEYS = PLATFORM_KEYS.filter((k) => PLATFORMS[k].type === 'video');
+export const MUSIC_KEYS = PLATFORM_KEYS.filter((k) => musicOnly(k));
+const STORYBOARD_KEYS = PLATFORM_KEYS.filter((k) => SHORT_BASES.includes(baseKey(k)));
 
 // ---------- 답 형식 ----------
 
@@ -228,6 +238,9 @@ async function platformSystem(key, extra = '', concept = '') {
     extra,
     '', '# 공통 규칙', await loadSkill('humanize-korean'),
     '', `# ${p.label} 스킬`, await loadSkill(p.skill),
+    p.style ? `
+# 이번에 쓰는 판: ${musicOnly(key) ? '말 없는 판 (음악 + 글자)' : '말 있는 판 (나레이션)'} — 위 플랫폼 스킬과 다르면 이것이 우선
+${await loadSkill(p.style)}` : '',
     strategy ? `\n# 이 컨셉(${CONCEPT_BY_ID[concept].label})의 콘텐츠 전략\n${strategy}` : '',
     blogCat ? `\n# 이 컨셉의 블로그 작성법\n${blogCat}` : '',
   ].join('\n');
@@ -304,7 +317,7 @@ function storyboardText(plan, key) {
       '- **이 영상은 말이 없다 (음악 + 글자)**. 인스타 인기 맛집 릴스의 절반이 이 형식. 모든 장면의 narration 은 빈 문자열("").',
       '- 컷 길이는 프로그램이 박자에 맞춰 정한다 (영상 컷 1.5초, 사진 컷 1초). 그러니 컷 수가 곧 영상 길이: 스토리보드 컷을 빠짐없이 쓴다.',
       '- **컷마다 화면 글자 한 줄**: 컷이 1개인 장면은 caption, 컷이 2개 이상이면 cut_captions 에 컷마다 (shot, extra_shots 순서). 각 **4~12자**, 그 컷에 보이는 것 + 맛·양·가격 한마디 ("두툼한 생삼겹", "육즙 가둔 겉바속촉"). 보는 사람이 1초 안에 읽는다.',
-      '- hook(첫 화면 위쪽 글자)은 친구 태그 한 줄이나 짧은 반전: "@고기 사줄 친구 태그", "여기 웨이팅 이유". 12자 안팎.',
+      ({ shorts: '- hook(첫 화면 위쪽 큰 제목)은 숫자·결론 2줄 ("1인 1만원\n고기 무한"). 한 줄 10자 안팎.', reels: '- hook(첫 화면 위쪽 글자)은 친구 태그 한 줄이나 짧은 반전: "@고기 사줄 친구 태그", "여기 웨이팅 이유". 12자 안팎.', tiktok: '- hook(위쪽에 고정되는 제목)은 가격 제목: "한우 등심 9,900원", "만원에 모둠회". 확인된 가격이 없으면 양·결론 한마디. 14자 안팎. 컷 글자는 메뉴 이름(+가격)을 나열.' })[baseKey(key)] || '',
       '- 마지막 컷 글자는 "여기가 어디" 정보: 가게 이름이나 동네·역 (예: "○○역 3번 출구 앞"). 가격·주차 같은 자세한 정보는 캡션(description)에.',
       '- 스토리보드에 없는 컷을 더하지 않는다. 같은 영상에서 8초 안쪽이거나 구도가 같은 장면은 함께 쓰지 않는다.',
       '- label 은 스토리보드의 이름표를 그대로. 이름표가 없는 비트는 빈칸.',
@@ -444,6 +457,8 @@ export async function writeAll(project, plan, onDone = () => {}) {
   ].join('\n') : '');
   await run(STAGE_B, note([describe('shorts', '유튜브 쇼츠')]));
   await run(STAGE_C, note([describe('shorts', '유튜브 쇼츠'), describe('tiktok', '틱톡')]));
+  // 말 없는 판: 말 있는 세 판을 다 보고 (같은 플랫폼 말 있는 판과 훅·첫 컷이 겹치지 않게)
+  await run(MUSIC_KEYS, note(SHORT_BASES.map((k) => describe(k, PLATFORMS[k].label))));
   // 블로그 사실 확인: 근거 없는 문장만 찾아서 지우거나 바꾼다
   if (process.env.FACTCHECK !== 'off') {
     try {
@@ -571,6 +586,7 @@ export function mockPlan(project) {
     shorts: sbVideo || video(`${name} 1분 소개`, `${name}\n가봤어요`, pick(8), `[예시 설명] ${name} 짧게 소개해요.`),
     reels: video(name, '여기 어디게?', pick(5, 1), `[예시 캡션] ${name} 다녀왔어요 ✨`, ['릴스']),
     tiktok: video(`${name} 실화?`, '이거 실화냐', pick(6, 1).reverse(), `[예시 캡션] ${name} 가본 사람?`, ['틱톡']),
+    ...Object.fromEntries(MUSIC_KEYS.map((k) => [k, video(name, '@같이 갈 친구', pick(6, 2), `[예시 캡션] ${name} 말 없는 판`, [])])),
     longform: video(`${name} 자세히 둘러보기`, `${name} 투어`, shots, `[예시 설명] ${name}을 처음부터 끝까지 보여드려요.`, [], true),
     carousel: {
       slides: spread(shots, 6).map((r, i) => ({ shot: r, headline: i === 0 ? `${name}\n다녀왔어요` : w(i), body: i === 0 ? '[예시] 넘겨서 보세요' : '[예시] AI 연결 후 실제 내용으로 바뀌어요' })),
@@ -714,7 +730,7 @@ export function finalizePlan(plan, project, only = null) {
       cur.scenes = scenes;
       cur.hook = String(cur.hook || '').replace(/\\n/g, '\n');
       if (cur.thumbnail_text !== undefined) cur.thumbnail_text = String(cur.thumbnail_text).replace(/\\n/g, '\n').trim();
-      cur.hashtags = withPlaceTag(cleanTags(cur.hashtags, TAG_MAX[k]), plan, TAG_MAX[k]);
+      cur.hashtags = withPlaceTag(cleanTags(cur.hashtags, TAG_MAX[baseKey(k)]), plan, TAG_MAX[baseKey(k)]);
     } else if (p.type === 'carousel') {
       cur.slides = (cur.slides || []).map((sl) => {
         const s = resolve(sl.shot);

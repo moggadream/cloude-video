@@ -10,7 +10,7 @@ const [id, ...want] = process.argv.slice(2);
 if (!id) { console.error('작업 ID를 주세요 (data/projects/ 아래 폴더 이름)'); process.exit(1); }
 const p = await getProject(id);
 const dir = projectDir(id);
-const formats = want.length ? want : ['shorts', 'reels', 'tiktok'];
+const formats = want.length ? want : ['shorts', 'reels', 'tiktok', 'shorts_music', 'reels_music', 'tiktok_music'];
 const sb = p.plan?.storyboard;
 const tpl = storyboardFor(p.plan?.concept);
 const framing = new Map((p.plan?.shots || []).map((s) => [s.ref, s.framing]));

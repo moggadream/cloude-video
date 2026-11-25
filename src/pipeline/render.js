@@ -2,7 +2,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { config, musicOnly } from '../config.js';
+import { config, musicOnly, baseKey } from '../config.js';
 import { ffmpeg, audioDuration, concatLine, videoColorFilter } from './media.js';
 import { narrate, makeMusic } from './audio.js';
 import { renderOverlay } from './overlay.js';
@@ -42,7 +42,7 @@ const estimateSeconds = (text) => (text ? text.replace(/\s/g, '').length / 6 + 0
  * @param {(p:number)=>void} [opts.onProgress]
  */
 export async function renderVideo({ format, script, project, dir, musicPrompt, onProgress = () => {} }) {
-  const fmt = FORMATS[format];
+  const fmt = FORMATS[baseKey(format)];
   const work = path.join(dir, 'work', format);
   await fs.rm(work, { recursive: true, force: true });
   await fs.mkdir(work, { recursive: true });
