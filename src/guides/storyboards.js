@@ -32,12 +32,13 @@ export const STORYBOARDS = {
     cutSec: [1, 2.2], totalSec: [12, 45], minCuts: 8, label: false,
     mix: { minClose: 0.6, maxWide: 0.2 },
     beats: [
-      { id: 'hook', role: '첫 컷: 대표 메뉴 시즐(김·불·늘어남) 또는 가격이 보이는 간판 + 큰 제목', framing: ['sizzle', 'close', 'top', 'sign', 'price'], need: true },
-      { id: 'hero', role: '대표 메뉴 가까이 (위 90도 → 45도), 가격 표시', framing: ['top', 'close', 'sizzle'], need: true, multi: true },
-      { id: 'action', role: '뜨기·자르기·찢기·늘리기 같은 동작', framing: ['hands', 'sizzle'], need: false },
-      { id: 'more', role: '다른 메뉴·반찬·셀프바를 1~2초씩 빠르게', framing: ['top', 'close', 'medium'], need: false, multi: true },
-      { id: 'space', role: '가게 분위기 한 컷 (넓은 컷은 1개까지)', framing: ['wide', 'sign', 'medium'], need: false },
-      { id: 'info', role: '마무리: 위치·웨이팅·주문 팁 한 줄 (메뉴판·간판 컷)', framing: ['price', 'sign', 'wide', 'close'], need: true },
+      // 인스타 인기 고기집 릴스 10편(46만~239만 회, 2026-11-25): 첫 화면부터 손이 움직이고, 간판은 맨 끝에 (docs/research/instagram-reels.md)
+      { id: 'hook', role: '첫 컷: 한 입 들어 올리기(고기·면을 집게·젓가락으로 카메라 쪽으로) 또는 시즐. 첫 화면부터 손·음식이 움직인다. 간판·외관·직원으로 시작하지 않는다', framing: ['hands', 'sizzle', 'close', 'top'], need: true },
+      { id: 'hero', role: '대표 메뉴: 생고기 한 판 → 불판에 올리기·굽기 (가까이, 위에서)', framing: ['top', 'close', 'sizzle', 'hands'], need: true, multi: true },
+      { id: 'action', role: '동작: 자르기·뒤집기·부어주기·소스 찍기·쌈 싸기 (손이 움직이는 컷)', framing: ['hands', 'sizzle'], need: false, multi: true },
+      { id: 'more', role: '곁들임·마무리 메뉴: 찌개에 밥 말기, 면·볶음밥, 후식을 1~2초씩', framing: ['hands', 'top', 'close', 'medium'], need: false, multi: true },
+      { id: 'space', role: '가게 분위기 한 컷 (넓은 컷은 1개까지)', framing: ['wide', 'medium'], need: false },
+      { id: 'info', role: '마지막 컷: 간판·외관·메뉴판으로 "여기가 어디" + 팁 한 줄', framing: ['sign', 'price', 'wide'], need: true },
     ],
   },
   cafe: {
@@ -168,8 +169,8 @@ export function usableShots(shotInfo) {
   for (const [ref, v] of shotInfo) {
     if (v.quality === 'bad') continue;
     const media = String(ref).split(':')[0];
-    const clash = picked.some((p) => p.media === media && (!String(ref).includes(':') || Math.abs((p.time ?? 0) - (v.time ?? 0)) < 8));
-    if (!clash) picked.push({ ref, media, time: v.time });
+    const clash = picked.some((p) => p.media === media && (!String(ref).includes(':') || Math.abs((p.time ?? 0) - (v.time ?? 0)) < 8 || (v.framing && p.framing === v.framing)));
+    if (!clash) picked.push({ ref, media, time: v.time, framing: v.framing });
   }
   return picked.map((p) => p.ref);
 }
@@ -264,10 +265,12 @@ export function scoreStoryboard(sb, concept, shotInfo) {
     for (let j = i + 1; j < cuts.length; j++) {
       if (cuts[i] === cuts[j] || mediaOf(cuts[i]) !== mediaOf(cuts[j]) || !String(cuts[i]).includes(':')) continue;
       const a = shotInfo.get(cuts[i])?.time; const b = shotInfo.get(cuts[j])?.time;
-      if (a !== undefined && b !== undefined && Math.abs(a - b) < 8) near.push(`${cuts[i]}~${cuts[j]}`);
+      const fa = shotInfo.get(cuts[i])?.framing; const fb = shotInfo.get(cuts[j])?.framing;
+      // 고정 카메라 영상은 떨어진 장면도 같은 구도면 같은 화면으로 보인다
+      if ((a !== undefined && b !== undefined && Math.abs(a - b) < 8) || (fa && fa === fb)) near.push(`${cuts[i]}~${cuts[j]}`);
     }
   }
-  if (near.length) issues.push(`같은 영상에서 8초 안쪽 장면을 또 씀(같은 화면으로 보임): ${near.slice(0, 4).join(', ')} → 영상 하나에서 한 컷만`);
+  if (near.length) issues.push(`같은 영상에서 8초 안쪽이거나 구도가 같은 장면을 또 씀(같은 화면으로 보임): ${near.slice(0, 4).join(', ')} → 영상 하나에서 한 컷만`);
   const dup = cuts.length - new Set(cuts).size;
   const bad = cuts.filter((r) => shotInfo.get(r)?.quality === 'bad').length;
   const unknownRef = cuts.filter((r) => !shotInfo.has(r)).length;

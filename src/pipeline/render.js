@@ -56,6 +56,8 @@ export async function renderVideo({ format, script, project, dir, musicPrompt, o
       : Math.max(estimateSeconds(s.narration), estimateSeconds(s.caption));
     if (!dur) dur = m.kind === 'video' ? Math.min(4, m.duration - s.clip_start) : 3;
     dur = Math.min(Math.max(dur, fmt.minScene), voice ? Infinity : fmt.maxScene);
+    // 숏폼: 스토리보드 컷이 나레이션이 짧다고 사라지지 않게, 컷마다 최소 1.1초는 준다 (말 없는 틈은 배경음악이 채움)
+    if (fmt.short) dur = Math.max(dur, (1 + (s.extra_shots || []).length) * 1.1);
     if (total + dur > fmt.maxTotal) {
       if (scenes.length === 0) dur = fmt.maxTotal; // 장면이 하나뿐이면 자른다
       else break;
@@ -96,7 +98,7 @@ export async function renderVideo({ format, script, project, dir, musicPrompt, o
 
   // 6) 자막 파일
   const assFile = path.join(work, 'subs.ass');
-  const events = overlayEvents(scenes, script, format, cuts);
+  const events = overlayEvents(scenes, script, format, cuts, fmt.short ? project.plan?.place_name : '');
   // 화면 글자: Remotion(움직이는 글자) → 안 되면 ASS 자막
   const overlaid = path.join(work, 'overlaid.mp4');
   const useOverlay = await renderOverlay({ video: joined, out: overlaid, events, fmt, duration: total, onProgress: (r) => onProgress(0.8 + 0.13 * r) });
@@ -156,6 +158,10 @@ export async function renderVideo({ format, script, project, dir, musicPrompt, o
     // 스토리보드 비교용: 실제로 화면에 나간 컷 (시작 시각·길이·장면 ref)
     cuts: cuts.map((c) => ({ t: Math.round(c.start * 10) / 10, d: Math.round(c.duration * 10) / 10, shot: c.shot, fill: c.fill })),
     plannedScenes: script.scenes.length,
+    // 제작 문서(대본·스토리보드)용: 장면 시각, 화면 글자, 말하는 시간 비율
+    scenes: scenes.map((s) => ({ t: Math.round(s.start * 100) / 100, d: Math.round(s.duration * 100) / 100 })),
+    texts: events,
+    speechRatio: hasVoice ? Math.round((100 * scenes.reduce((a, s) => a + (s.voice?.duration || 0), 0)) / total) : null,
     usedMedia: [...new Set(scenes.map((s) => s.media_id))],
     renderedAt: new Date().toISOString(),
   };
@@ -401,11 +407,14 @@ export const assText = (s) => String(s)
  * 화면 글자 데이터: 언제(초) 어떤 글자를 어떤 모양으로 띄우는지. ASS 자막과 Remotion 글자 층이 함께 쓴다.
  * type: hook(첫 화면 큰 제목) | caption(자막) | price(가격표) | label(번호 이름표) | chapter(롱폼 챕터)
  */
-export function overlayEvents(scenes, script, format, cuts = []) {
+export function overlayEvents(scenes, script, format, cuts = [], place = '') {
   const ev = [];
   const r2 = (t) => Math.round(t * 100) / 100;
   const push = (type, start, end, text) => { if (text && end > start) ev.push({ type, start: r2(start), end: r2(end), text: String(text) }); };
   if (script.hook) push('hook', 0, Math.min(scenes[0].duration, 2.8), script.hook);
+  // 가게 이름 위쪽 고정 (인기 맛집 쇼츠처럼 첫 제목이 사라진 뒤 끝까지): 어디인지 놓쳐도 바로 보이게
+  const end = scenes.at(-1).start + scenes.at(-1).duration;
+  if (place && String(place).length <= 16) push('place', script.hook ? Math.min(scenes[0].duration, 2.8) : 0.2, end - 0.1, place);
   for (const [i, sc] of scenes.entries()) {
     const s = sc.start;
     const e = sc.start + sc.duration;
@@ -478,6 +487,7 @@ function buildAss(events, fmt) {
     ['Price', 'NanumGothicExtraBold', priceSize, '&H00000000', '&H0000D7FF', '&H0000D7FF', 1, 3, 18, 0, 8, vertical ? 560 : 260],
     ['Chapter', 'NanumGothicExtraBold', chapSize, '&H00FFFFFF', '&H00000000', '&H96000000', 1, 3, 14, 0, 7, 60],
     // 번호 이름표 (인기 목록형 쇼츠의 위쪽 흰 상자 "1. 상품명")
+    ['Place', 'NanumGothicExtraBold', Math.round(base * 0.042), '&H00FFFFFF', '&H00000000', '&H8C000000', 1, 3, 12, 0, 8, 200],
     ['Label', 'NanumGothicExtraBold', Math.round(base * (vertical ? 0.052 : 0.042)), '&H00111111', '&H00FFFFFF', '&H00FFFFFF', 1, 3, 16, 0, 8, vertical ? 330 : 70],
   ];
   const header = [
@@ -497,9 +507,10 @@ function buildAss(events, fmt) {
     'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
   ];
   // 화면 글자 데이터(overlayEvents)를 ASS 자막으로
-  const layer = { hook: 2, label: 2, caption: 1, price: 3, chapter: 2 };
-  const style = { hook: 'Hook', label: 'Label', caption: 'Caption', price: 'Price', chapter: 'Chapter' };
+  const layer = { place: 1, hook: 2, label: 2, caption: 1, price: 3, chapter: 2 };
+  const style = { place: 'Place', hook: 'Hook', label: 'Label', caption: 'Caption', price: 'Price', chapter: 'Chapter' };
   const fx = {
+    place: '{\\fad(200,200)}',
     hook: '{\\fad(100,250)}',
     label: '{\\fad(80,80)}',
     caption: '{\\fad(60,60)}',

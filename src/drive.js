@@ -167,6 +167,8 @@ export async function exportToDrive(project) {
   for (const [key, name] of Object.entries(FILE_NAMES)) {
     const v = project.outputs?.[key]?.video;
     if (v) await fs.copyFile(path.join(out, v.file), path.join(dest, name));
+    const doc = project.outputs?.[key]?.doc;
+    if (doc) await fs.copyFile(path.join(out, doc), path.join(dest, name.replace('.mp4', '_대본스토리보드.html'))).catch(() => {});
   }
   const thumb = project.outputs?.longform?.thumbnail;
   if (thumb) await fs.copyFile(path.join(out, thumb.file), path.join(dest, '4_유튜브롱폼_썸네일.jpg')).catch(() => {});

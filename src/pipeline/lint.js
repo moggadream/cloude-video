@@ -104,6 +104,11 @@ export function lintOutput(key, out, plan, project) {
     if (key !== 'longform') {
       const silent = out.scenes.map((s, i) => (String(s.narration || '').trim() ? 0 : i + 1)).filter(Boolean);
       if (silent.length) add('error', `나레이션이 없는 장면: ${silent.join(', ')}번. 숏폼은 끝까지 쉬지 않고 말한다 (마지막 장면도 팁 한마디)`);
+      // 끝은 볼 사람에게 쓸모 있는 팁 한마디 (저장·방문으로 이어짐). 사실만 말하고 끝나면 영상이 뚝 끊긴 느낌
+      const last = String(out.scenes.at(-1)?.narration || '');
+      if (last && !/[?？]\s*$/.test(last) && !/(세요|하면|면 돼|챙기|추천|꼭|피해|예약|팁|가 좋|게 좋|드셔|시키|노려|가시|오세|기억|저장|조심|주의|챙겨|가면|전에|마세요)/.test(last)) {
+        add('error', `마지막 나레이션이 팁 없이 끝남: "${last}". 마지막 장면은 팁 한마디나 댓글 질문으로 끝낸다 (예: "겉옷은 따로 챙기세요", "7시 전에 가면 바로 앉아요")`);
+      }
     }
     const norm = (x) => String(x || '').replace(/[\s\n.,!?~·]/g, '');
     const h = norm(out.hook);
@@ -130,27 +135,30 @@ export function lintOutput(key, out, plan, project) {
         const m = (project?.media || []).find((x) => x.id === mid);
         return m && f !== undefined ? m.frames?.[Number(f)]?.time : undefined;
       };
+      const framingOf = new Map((plan.shots || []).map((s) => [s.ref, s.framing]));
       const near = [];
       for (let i = 0; i < cuts.length; i++) {
         for (let j = i + 1; j < cuts.length; j++) {
           const a = timeOf(cuts[i]); const b = timeOf(cuts[j]);
-          if (cuts[i].split(':')[0] === cuts[j].split(':')[0] && (cuts[i] === cuts[j] || (a !== undefined && b !== undefined && Math.abs(a - b) < 8))) near.push(`${cuts[i]}~${cuts[j]}`);
+          const fa = framingOf.get(cuts[i]); const fb = framingOf.get(cuts[j]);
+          if (cuts[i].split(':')[0] === cuts[j].split(':')[0] && (cuts[i] === cuts[j] || (a !== undefined && b !== undefined && Math.abs(a - b) < 8) || (fa && fa === fb))) near.push(`${cuts[i]}~${cuts[j]}`);
         }
       }
-      if (near.length) add('error', `같은 화면이 반복되는 컷: ${near.slice(0, 4).join(', ')} (같은 영상 8초 안쪽). 영상 하나에서 한 컷만 쓴다`);
+      if (near.length) add('error', `같은 화면이 반복되는 컷: ${near.slice(0, 4).join(', ')} (같은 영상 8초 안쪽이거나 같은 구도). 영상 하나에서 한 컷만 쓴다`);
     }
     // 스토리보드 컷 길이: 나레이션이 길면 컷이 늘어져 기준(인기 쇼츠)보다 느려진다 → 오류로 보고 자동 보완
     // 스토리보드 기준 길이보다 짧은 영상 (나레이션이 너무 짧음) → 오류로 보고 자동 보완
     if (key !== 'longform' && plan.storyboard?.beats?.length) {
       const minSec = storyboardFor(plan.concept).totalSec[0];
       const chars = out.scenes.reduce((a, s) => a + String(s.narration || '').replace(/\s/g, '').length, 0);
-      const est = chars / 6.5 + out.scenes.length * 0.25;
-      if (est < minSec * 0.9) add('error', `영상이 너무 짧음 (나레이션 공백 빼고 ${chars}자 ≈ ${Math.round(est)}초, 기준 ${minSec}초 이상 → 나레이션을 ${Math.round((minSec - out.scenes.length * 0.25) * 6.5)}자 이상으로)`);
+      // 숏폼 목소리는 +18% 빨라 실제로 1초에 7~8자 (11/25 측정: 67자 5장면 → 10.1초) → 짧은 쪽은 빠르게 잡는다
+      const est = chars / 7.5 + out.scenes.length * 0.25;
+      if (est < minSec) add('error', `영상이 너무 짧음 (나레이션 공백 빼고 ${chars}자 ≈ ${Math.round(est)}초, 기준 ${minSec}초 이상 → 나레이션을 ${Math.round((minSec - out.scenes.length * 0.25) * 7.5)}자 이상으로)`);
       // 컷 수에 비해 나레이션이 길면 컷이 늘어져 인기 쇼츠(맛집 평균 컷 1.5~1.8초)보다 느려진다
       const tpl = storyboardFor(plan.concept);
       const cutsN = out.scenes.reduce((a, s) => a + 1 + (s.extra_shots || []).length, 0);
       const target = Math.max(minSec, Math.min(tpl.totalSec[1], cutsN * ((tpl.cutSec[0] + tpl.cutSec[1]) / 2)));
-      if (est > target * 1.1) add(est > target * 1.2 ? 'error' : 'warn', `컷 ${cutsN}개에 나레이션이 길어 컷이 느려짐 (≈${Math.round(est)}초, 목표 ${Math.round(target)}초 → 나레이션을 공백 빼고 ${Math.round((target - out.scenes.length * 0.25) * 6.5)}자 안팎으로)`);
+      if (est > target * 1.1) add(est > target * 1.2 ? 'error' : 'warn', `컷 ${cutsN}개에 나레이션이 길어 컷이 느려짐 (≈${Math.round(est)}초, 목표 ${Math.round(target)}초 → 나레이션을 공백 빼고 ${Math.round((target - out.scenes.length * 0.25) * 7.5)}자 안팎으로)`);
     }
     if (key !== 'longform' && plan.storyboard?.beats?.length) {
       const hi = storyboardFor(plan.concept).cutSec[1];

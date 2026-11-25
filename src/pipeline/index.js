@@ -7,6 +7,7 @@ import { transcribeMedia } from './speech.js';
 import { makePlan, finalizePlan, reviseOutput, PLATFORMS, PLATFORM_KEYS, VIDEO_KEYS, allShots } from './plan.js';
 import { renderVideo, FORMATS, fmtClock } from './render.js';
 import { renderCarousel, renderThumbnail } from './carousel.js';
+import { writeProductionDoc } from './production.js';
 import { buildOutputs, textFor } from './texts.js';
 import { recordFeedback } from '../ai/skills.js';
 import { aiBackend } from '../ai/index.js';
@@ -150,6 +151,9 @@ export async function renderOne(id, key, onProgress = () => {}, { silent = false
         if (o.approval === 'approved') o.approval = 'pending';
         if (key === 'longform') Object.assign(o, textFor(key, p.plan, { chapters: result.chapters }));
       });
+      // 대본·스토리보드 문서 (실패해도 영상은 그대로)
+      const doc = await writeProductionDoc({ project: await getProject(id), key, dir }).catch((err) => { console.warn('[제작 문서] 실패:', err.message); return null; });
+      if (doc) await updateProject(id, (p) => { p.outputs[key].doc = doc; });
     }
   } catch (err) {
     await updateProject(id, (p) => { p.outputs[key].status = 'failed'; p.outputs[key].error = err.message; });

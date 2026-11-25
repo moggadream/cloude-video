@@ -287,11 +287,12 @@ function storyboardText(plan, key) {
     '### 스토리보드로 장면 쓰는 법 (스킬의 장면 구성보다 이것이 우선)',
     '- 비트 하나 = 장면 하나. 장면의 shot 은 그 비트의 첫 컷, extra_shots 는 나머지 컷 (같은 나레이션 동안 빠르게 이어짐).',
     '- 항목마다 반복하는 비트(이름표가 다른 컷들)는 항목마다 장면을 나눠도 된다. 이때 label 은 그 항목의 이름표.',
-    `- **나레이션 전체 분량: 공백 빼고 ${Math.round(sbTotal * 6)}자 안팎** (스토리보드 ${Math.round(sbTotal)}초 × 1초에 약 6자. 인기 리뷰 쇼츠는 영상 내내 말한다). 이보다 크게 짧으면 영상이 기준보다 짧아진다.`,
-    '- 장면마다 나레이션은 그 비트 길이 × 6자 정도. 컷이 여러 개인 장면은 그만큼 길게 말하고, 컷이 1개인 장면만 12자 안팎으로 짧게.',
+    `- **나레이션 전체 분량: 공백 빼고 ${Math.round(sbTotal * 7)}자 안팎** (스토리보드 ${Math.round(sbTotal)}초 × 1초에 약 7자, 숏폼 목소리가 빠르다. 인기 리뷰 쇼츠는 영상 내내 말한다). 이보다 크게 짧으면 영상이 기준보다 짧아진다.`,
+    '- 장면마다 나레이션은 그 비트 길이 × 7자 정도. 컷이 여러 개인 장면은 그만큼 길게 말하고, 컷이 1개인 장면만 12자 안팎으로 짧게.',
+    '- **말은 컷 순서를 따른다**: 자막이 말하는 대로 바뀌므로, 컷이 여러 개인 장면은 shot → extra_shots 순서대로 그 컷에 보이는 것을 한 구절씩 말한다 (찌개 컷에서 "된장찌개", 고기 컷에서 "4인분"). 그 장면 컷에 안 보이는 메뉴 이름은 말하지 않는다.',
     '- 첫 장면 나레이션은 10자 안팎의 의견·반전·가격 한마디 ("이 가격에 이게 나와?", "여긴 앉아만 있으면 돼"). 누구랑·언제 갔는지 같은 상황 설명으로 시작하지 않는다. 첫 컷은 2초 안에 넘어간다.',
     '- 모든 장면에 나레이션이 있다. 인기 리뷰 쇼츠는 영상의 90% 가까이 쉬지 않고 말한다. 마지막 장면도 팁 한마디로 끝낸다 (화면 글자만 두고 말을 비우지 않는다).',
-    '- 스토리보드에 없는 컷을 더하지 않는다. 같은 영상에서 8초 안쪽의 장면(m3:f0과 m3:f1)은 거의 같은 화면이라 함께 쓰지 않는다.',
+    '- 스토리보드에 없는 컷을 더하지 않는다. 같은 영상에서 8초 안쪽이거나 구도가 같은 장면(m3:f0과 m3:f1)은 거의 같은 화면이라 함께 쓰지 않는다.',
     '- label 은 스토리보드의 이름표를 그대로. 이름표가 없는 비트는 빈칸.',
     '- 컷이 2개 이상인 장면은 cut_captions 에 컷마다 그 컷에 보이는 것의 짧은 이름(메뉴·상품·장소, 10자 안팎)을 적는다. 인기 쇼츠는 컷이 바뀌면 이름도 바뀐다 (한 컷에 한 정보). 이때 caption 은 비워도 된다.',
   ];
@@ -608,6 +609,22 @@ const clipStartOf = (s) => (s.media.kind === 'video' && s.media.frames.length > 
 export function enforceStoryboard(sb, cur) {
   if (!sb?.beats?.length || !cur?.scenes?.length) return;
   const refOf = (x) => (typeof x === 'string' ? x : x?.shot || '');
+  // 장면 수 = 비트 수이면 장면 i 의 컷 = 비트 i 의 컷 (스토리보드 그대로). 컷별 자막은 같은 컷이면 그대로 둔다
+  if (cur.scenes.length === sb.beats.length) {
+    for (const [i, sc] of cur.scenes.entries()) {
+      const want = sb.beats[i].shots || [];
+      if (!want.length) continue;
+      const old = [refOf(sc.shot), ...(sc.extra_shots || []).map(refOf)];
+      const caps = Array.isArray(sc.cut_captions) ? sc.cut_captions : [];
+      const capOf = new Map(old.map((r, j) => [r, caps[j] ?? (j === 0 ? sc.cut_caption : sc.extra_shots?.[j - 1]?.caption)]));
+      sc.shot = want[0];
+      delete sc.media_id; delete sc.clip_start;
+      sc.extra_shots = want.slice(1);
+      sc.cut_captions = want.map((r) => capOf.get(r) || '');
+      sc.cut_caption = sc.cut_captions[0];
+    }
+    return;
+  }
   // 대본이 스토리보드에 없는 컷을 extra_shots 에 더했으면 뺀다 (같은 화면 반복·기준 밖 컷 방지)
   const inBoard = new Set(sb.beats.flatMap((b) => b.shots));
   for (const sc of cur.scenes) {

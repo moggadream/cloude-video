@@ -101,9 +101,23 @@ function Chapter({ text, dur }) {
   );
 }
 
-const PARTS = { hook: Hook, caption: Caption, price: Price, label: Label, chapter: Chapter };
+/** 가게 이름: 위쪽에 작게 고정 (첫 제목이 사라진 뒤 끝까지) */
+function Place({ text, dur, L, vertical }) {
+  const { opacity, frame } = usePop(dur);
+  const x = interpolate(frame, [0, 8], [-30, 0], { extrapolateRight: 'clamp' });
+  return (
+    <AbsoluteFill style={{ alignItems: 'center', paddingTop: L.placeTop }}>
+      <div style={{ transform: `translateX(${x}px)`, opacity, display: 'flex', alignItems: 'center', gap: 14, background: 'rgba(0,0,0,.55)', color: '#fff', fontFamily: 'NanumGothicExtraBold', fontSize: vertical ? 44 : 36, padding: '10px 26px', borderRadius: 999 }}>
+        <span style={{ width: 16, height: 16, borderRadius: 8, background: '#FFD400', display: 'inline-block' }} />
+        {text}
+      </div>
+    </AbsoluteFill>
+  );
+}
+
+const PARTS = { place: Place, hook: Hook, caption: Caption, price: Price, label: Label, chapter: Chapter };
 // 겹칠 때 위에 오는 순서
-const Z = { caption: 1, chapter: 2, label: 3, hook: 4, price: 5 };
+const Z = { place: 0, caption: 1, chapter: 2, label: 3, hook: 4, price: 5 };
 
 export const Overlay = ({ video, events = [], layout, width, height }) => {
   useFonts();

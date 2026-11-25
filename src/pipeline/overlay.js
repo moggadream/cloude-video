@@ -64,6 +64,7 @@ export function overlayLayout(fmt) {
     hookTop: vertical ? 300 : 110,
     priceTop: vertical ? 560 : 250,
     labelTop: vertical ? 330 : 60,
+    placeTop: vertical ? 200 : 40,
     marginL: fmt.marginL ?? (vertical ? 70 : 160),
     marginR: fmt.marginR ?? (vertical ? 70 : 160),
   };

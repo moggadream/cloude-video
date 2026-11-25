@@ -92,6 +92,22 @@ export async function selfReview(project, plan, onStep = () => {}) {
       console.warn(`[review] ${k} 보완 실패:`, err.message);
     }
   }
+  // 숏폼 두 번째 손질: 첫 보완 뒤에도 규칙 오류(너무 짧음·같은 화면·팁 없음 등)가 남으면 그것만 한 번 더
+  const mid = lintPlan(current, project, PLATFORM_KEYS);
+  for (const k of ['shorts', 'reels', 'tiktok']) {
+    const left = (mid[k]?.issues || []).filter((i) => i.level === 'error');
+    if (!left.length) continue;
+    onStep(`자체 검증: ${PLATFORMS[k].label} 한 번 더 손질`, 0.9);
+    try {
+      current = await reviseOutput(project, k, [
+        ...left.map((i) => `- ${i.msg}`),
+        '- 위 문제만 고치고 나머지는 그대로. 나레이션을 늘릴 때는 그 장면 컷에 보이는 사실(장면 목록·메모)만 쓴다.',
+      ].join('\n'), { plan: current, auto: true });
+      if (!revised.includes(k)) revised.push(k);
+    } catch (err) {
+      console.warn(`[review] ${k} 한 번 더 손질 실패:`, err.message);
+    }
+  }
   // 마무리 손질: 블로그·쓰레드는 규칙 검사(말끝·길이·제목)가 남아 있으면 그것만 한 번 더 고친다
   let after = lintPlan(current, project, PLATFORM_KEYS);
   for (const k of ['blog', 'threads']) {
