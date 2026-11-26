@@ -115,9 +115,24 @@ function Place({ text, dur, L, vertical }) {
   );
 }
 
-const PARTS = { place: Place, hook: Hook, caption: Caption, price: Price, label: Label, chapter: Chapter };
+/** 네이버 클립식 위쪽 검은 띠 제목: 첫 줄 흰색, 둘째 줄 노란색, 영상 끝까지 */
+function Title({ text, dur, W }) {
+  const { opacity } = usePop(dur);
+  const lines = String(text).split('\n');
+  const maxChars = Math.max(...lines.map((l) => l.length), 1);
+  const size = Math.round(Math.min(84, Math.max(56, (W - 120) / maxChars)));
+  return (
+    <AbsoluteFill style={{ alignItems: 'stretch' }}>
+      <div style={{ opacity, marginTop: 120, background: 'rgba(0,0,0,.78)', padding: '22px 40px', textAlign: 'center', fontFamily: 'BlackHanSans', lineHeight: 1.15 }}>
+        {lines.map((l, i) => <div key={i} style={{ fontSize: size, color: i === lines.length - 1 && lines.length > 1 ? '#FFE14D' : '#FFFFFF' }}>{l}</div>)}
+      </div>
+    </AbsoluteFill>
+  );
+}
+
+const PARTS = { title: Title, place: Place, hook: Hook, caption: Caption, price: Price, label: Label, chapter: Chapter };
 // 겹칠 때 위에 오는 순서
-const Z = { place: 0, caption: 1, chapter: 2, label: 3, hook: 4, price: 5 };
+const Z = { title: 0, place: 0, caption: 1, chapter: 2, label: 3, hook: 4, price: 5 };
 
 export const Overlay = ({ video, events = [], layout, width, height }) => {
   useFonts();

@@ -13,7 +13,7 @@ export const FORMATS = {
   // 틱톡은 오른쪽 버튼·아래쪽 캡션이 화면을 가려서 글자를 더 안쪽·위쪽에 둔다
   tiktok: { label: '틱톡', w: 1080, h: 1920, maxTotal: 90, minScene: 1.5, maxScene: 6, short: true, captionMargin: 600, marginL: 70, marginR: 190 },
   // 네이버 클립은 아래쪽에 본문·버튼이 겹쳐서 글자를 조금 위로
-  naverclip: { label: '네이버 클립', w: 1080, h: 1920, maxTotal: 59, minScene: 1.5, maxScene: 6, short: true, captionMargin: 520, marginR: 150 },
+  naverclip: { label: '네이버 클립', w: 1080, h: 1920, maxTotal: 59, minScene: 1.5, maxScene: 6, short: true, captionMargin: 520, marginR: 150, titleBand: true },
   longform: { label: '유튜브 롱폼', w: 1920, h: 1080, maxTotal: 1800, minScene: 3.5, maxScene: 20, captionMargin: 90 },
 };
 
@@ -456,7 +456,9 @@ export function overlayEvents(scenes, script, format, cuts = [], place = '') {
   if (script.hook) push('hook', 0, Math.min(scenes[0].duration, 2.8), script.hook);
   // 가게 이름 위쪽 고정 (인기 맛집 쇼츠처럼 첫 제목이 사라진 뒤 끝까지): 어디인지 놓쳐도 바로 보이게
   const end = scenes.at(-1).start + scenes.at(-1).duration;
-  if (place && String(place).length <= 16) push('place', script.hook ? Math.min(scenes[0].duration, 2.8) : 0.2, end - 0.1, place);
+  // 네이버 클립: 인기 클립처럼 위쪽 검은 띠에 제목을 끝까지 둔다 (docs/research/naver-clip.md). 가게 이름은 올릴 때 장소 연결로
+  if (FORMATS[baseKey(format)]?.titleBand && script.hook) push('title', Math.min(scenes[0].duration, 2.8), end - 0.1, script.hook);
+  else if (place && String(place).length <= 16) push('place', script.hook ? Math.min(scenes[0].duration, 2.8) : 0.2, end - 0.1, place);
   for (const [i, sc] of scenes.entries()) {
     const s = sc.start;
     const e = sc.start + sc.duration;
@@ -549,8 +551,8 @@ function buildAss(events, fmt) {
     'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
   ];
   // 화면 글자 데이터(overlayEvents)를 ASS 자막으로
-  const layer = { place: 1, hook: 2, label: 2, caption: 1, price: 3, chapter: 2 };
-  const style = { place: 'Place', hook: 'Hook', label: 'Label', caption: 'Caption', price: 'Price', chapter: 'Chapter' };
+  const layer = { title: 1, place: 1, hook: 2, label: 2, caption: 1, price: 3, chapter: 2 };
+  const style = { title: 'Place', place: 'Place', hook: 'Hook', label: 'Label', caption: 'Caption', price: 'Price', chapter: 'Chapter' };
   const fx = {
     place: '{\\fad(200,200)}',
     hook: '{\\fad(100,250)}',
@@ -558,6 +560,7 @@ function buildAss(events, fmt) {
     caption: '{\\fad(60,60)}',
     price: '{\\fad(120,120)\\t(0,180,\\fscx112\\fscy112)\\t(180,320,\\fscx100\\fscy100)}',
     chapter: '{\\fad(150,150)}',
+    title: '{\\fad(200,0)}',
   };
   const ev = events.map((e) => `Dialogue: ${layer[e.type]},${assTime(e.start)},${assTime(e.end)},${style[e.type]},,0,0,0,,${fx[e.type]}${assText(e.text)}`);
   return [...header, ...ev, ''].join('\n');
