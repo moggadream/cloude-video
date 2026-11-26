@@ -10,6 +10,33 @@ import { FRAMINGS, FRAMING_IDS, storyboardFor, storyboardGuide, scoreStoryboard,
 
 export const STORYBOARD_PASS = 75;
 const SHORT_BASES = ['shorts', 'reels', 'tiktok', 'naverclip'];
+/** 숏폼 판마다 답하는 질문 (같은 가게라도 네 판이 같은 대본이 되지 않게) */
+const ANGLES = {
+  shorts: {
+    q: '"왜 여기야?"에 답한다.',
+    voice: '결론 한 줄 → 이유 2~3개 (가성비·편함·맛의 이유) → 팁. 존댓말 리뷰.',
+    music: '컷 글자로 결론 → 이유 → 팁.',
+    first: '스토리보드 그대로 (가장 강한 장면).',
+  },
+  tiktok: {
+    q: '"얼마에 뭐가 나와?"에 답한다.',
+    voice: '가격·양으로 시작해 메뉴를 컷마다 하나씩 나열 ("생삼겹, 양념갈비, 계란찜까지"), 친구한테 말하듯 반말 섞어서.',
+    music: '컷 글자는 메뉴 이름 + 가격·양 나열.',
+    first: '한 상 전체·여러 메뉴가 한꺼번에 보이는 컷 (양이 보이게). 없으면 메뉴가 가장 많이 보이는 컷.',
+  },
+  reels: {
+    q: '"어떤 느낌이야?"에 답한다.',
+    voice: '소리·식감·온도를 짧게 ("치익", "겉은 바삭, 속은 촉촉"). 사실 나열은 줄이고 감각 위주, 구절을 가장 짧게.',
+    music: '컷 글자는 소리·식감 한마디.',
+    first: '가장 맛있어 보이는 가까운 컷 (굽는 소리 나는 컷, 한 입 들어 올리는 컷).',
+  },
+  naverclip: {
+    q: '"가기 전에 뭘 알아야 해?"에 답한다.',
+    voice: '도착 → 주문 → 먹기 → 나올 때까지 방문 순서로, 웨이팅·인원·주문법·옷 같은 실용 정보를 존댓말로 안내.',
+    music: '컷 글자로 방문 순서 + 실용 정보 (웨이팅 몇 분, 몇 명 몇 인분).',
+    first: '외관·간판·가게 안 전경처럼 "여기 도착" 느낌의 컷. 없으면 상차림.',
+  },
+};
 
 const SPEECH_NOTE = '## 영상 속 말소리 (자동 받아쓰기: 직원 설명·안내 방송·촬영자가 한 말)\n'
   + '- 화면에 없는 정보(메뉴 설명, 가격, 영업시간, 추천)가 있으면 사실로 써도 된다. 누가 한 말인지 모르면 "직원분이 ~래요"처럼 단정하지 말고 "~라고 하더라고요"로.\n'
@@ -335,7 +362,10 @@ function storyboardText(plan, key) {
       '- label 은 스토리보드의 이름표를 그대로. 이름표가 없는 비트는 빈칸.',
     );
   }
-  if (key !== 'shorts') lines.push('- 쇼츠와 같은 스토리보드를 쓰되, 첫 컷은 hook 비트의 다른 후보로 바꾸거나 비트 안의 컷 순서를 바꿔 겹치지 않게 해도 된다. 비트 순서는 지킨다.');
+  // 판마다 다른 질문에 답한다: 같은 자료라도 각도·첫 컷·순서가 달라야 네 판이 같은 대본이 되지 않는다
+  const angle = ANGLES[baseKey(key)];
+  if (angle) lines.push(`- **이 판의 각도 (가장 중요)**: ${angle.q} ${musicOnly(key) ? angle.music : angle.voice}`, `- **첫 컷**: ${angle.first}`);
+  if (key !== 'shorts') lines.push('- 비트 순서는 이 판의 각도에 맞게 바꿔도 된다. **첫 컷과 장면 순서는 이미 쓴 다른 판과 반드시 다르게**, 같은 표현("앉아만 있으면" 같은 구절)을 되풀이하지 않는다. 컷이 남으면 다른 판이 쓰지 않은 컷을 골라 쓴다.');
   return lines.join('\n');
 }
 
@@ -401,6 +431,27 @@ export async function writePlatform(key, project, plan, siblings = '') {
   });
 }
 
+/**
+ * 같은 종류(말 있는 판끼리, 말 없는 판끼리)의 이미 쓴 다른 숏폼과 너무 비슷한지.
+ * 첫 컷과 장면 순서가 같거나, 나레이션 낱말이 45% 넘게 겹치면 비슷하다고 본다.
+ */
+export function similarShort(plan, key) {
+  if (!SHORT_BASES.includes(baseKey(key)) || !plan[key]?.scenes?.length) return null;
+  const words = (k) => new Set(plan[k].scenes.map((s) => `${s.narration || ''} ${s.caption || ''} ${(s.cut_captions || []).join(' ')}`).join(' ')
+    .replace(/[^\p{L}\p{N} ]/gu, ' ').split(/\s+/).filter((w) => w.length >= 2));
+  const order = (k) => plan[k].scenes.map((s) => s.shot).join('>');
+  const mine = words(key);
+  for (const k of PLATFORM_KEYS) {
+    if (k === key || musicOnly(k) !== musicOnly(key) || !SHORT_BASES.includes(baseKey(k)) || !plan[k]?.scenes?.length) continue;
+    if (order(k) === order(key)) return { msg: `${PLATFORMS[k].label}와 장면 순서가 똑같음`, words: [] };
+    const theirs = words(k);
+    const both = [...mine].filter((w) => theirs.has(w));
+    const ratio = both.length / Math.max(1, Math.min(mine.size, theirs.size));
+    if (ratio > 0.45) return { msg: `${PLATFORMS[k].label}와 말이 ${Math.round(ratio * 100)}% 겹침`, words: both.slice(0, 12) };
+  }
+  return null;
+}
+
 /** 동시에 n개씩 실행 */
 export async function pool(items, n, fn) {
   const results = new Array(items.length);
@@ -450,10 +501,17 @@ export async function makePlan(project, dir, onStep = () => {}) {
  */
 export const STAGE_A = ['shorts', 'longform', 'blog', 'threads'];
 export const STAGE_B = ['tiktok', 'carousel'];
-export const STAGE_C = ['reels', 'naverclip']; // 쇼츠·틱톡을 다 보고 마지막에 (훅이 겹치지 않게)
-export async function writeAll(project, plan, onDone = () => {}) {
-  const run = (keys, siblings) => pool(keys, 3, async (k) => {
+export const STAGE_C = ['reels']; // 쇼츠·틱톡을 다 보고 (훅이 겹치지 않게)
+export const STAGE_D = ['naverclip']; // 말 있는 세 판을 다 보고 마지막에
+export async function writeAll(project, plan, onDone = () => {}, only = null) {
+  const run = (keys, siblings) => pool(keys.filter((k) => !only || only.includes(k)), 3, async (k) => {
     plan[k] = await writePlatform(k, project, plan, siblings);
+    // 이미 쓴 다른 숏폼과 너무 비슷하면 겹친 곳을 알려 주고 한 번 다시 쓴다
+    const same = similarShort(plan, k);
+    if (same) {
+      console.log(`[ai] ${PLATFORMS[k].label}: ${same.msg} → 다시 씀`);
+      plan[k] = await writePlatform(k, project, plan, `${siblings}\n\n## 다시 쓰기: ${same.msg}\n이 판의 각도대로 첫 컷·장면 순서·문장을 바꾸세요. 겹친 말: ${same.words.join(', ')}`);
+    }
     onDone(k);
   });
   await run(STAGE_A, '');
@@ -461,7 +519,8 @@ export async function writeAll(project, plan, onDone = () => {}) {
     const s = plan[k];
     if (!s?.scenes) return '';
     return [`### ${label}`, `- 훅: ${String(s.hook).replace(/\n/g, ' / ')}`,
-      `- 장면 순서: ${s.scenes.map((x) => x.shot).join(' → ')}`, `- 첫 나레이션: ${s.scenes[0]?.narration || ''}`].join('\n');
+      `- 장면 순서: ${s.scenes.map((x) => x.shot).join(' → ')}`,
+      `- 나레이션: ${s.scenes.map((x) => x.narration).filter(Boolean).join(' / ') || '(말 없음)'}`].join('\n');
   };
   const note = (blocks) => (blocks.filter(Boolean).length ? [
     '## 이미 쓴 다른 숏폼 (이것들과 겹치지 않게)', ...blocks.filter(Boolean),
@@ -469,10 +528,11 @@ export async function writeAll(project, plan, onDone = () => {}) {
   ].join('\n') : '');
   await run(STAGE_B, note([describe('shorts', '유튜브 쇼츠')]));
   await run(STAGE_C, note([describe('shorts', '유튜브 쇼츠'), describe('tiktok', '틱톡')]));
+  await run(STAGE_D, note([describe('shorts', '유튜브 쇼츠'), describe('tiktok', '틱톡'), describe('reels', '인스타 릴스')]));
   // 말 없는 판: 말 있는 세 판을 다 보고 (같은 플랫폼 말 있는 판과 훅·첫 컷이 겹치지 않게)
   await run(MUSIC_KEYS, note(SHORT_BASES.map((k) => describe(k, PLATFORMS[k].label))));
   // 블로그 사실 확인: 근거 없는 문장만 찾아서 지우거나 바꾼다
-  if (process.env.FACTCHECK !== 'off') {
+  if (process.env.FACTCHECK !== 'off' && (!only || only.includes('blog'))) {
     try {
       const { factCheckBlog } = await import('./factcheck.js');
       const fc = await factCheckBlog(project, plan);
@@ -652,12 +712,19 @@ const clipStartOf = (s) => (s.media.kind === 'video' && s.media.frames.length > 
 export function enforceStoryboard(sb, cur) {
   if (!sb?.beats?.length || !cur?.scenes?.length) return;
   const refOf = (x) => (typeof x === 'string' ? x : x?.shot || '');
-  // 장면 수 = 비트 수이면 장면 i 의 컷 = 비트 i 의 컷 (스토리보드 그대로). 컷별 자막은 같은 컷이면 그대로 둔다
+  // 장면 수 = 비트 수이면 장면마다 그 장면이 고른 컷이 든 비트의 컷을 다 쓴다 (스토리보드 컷 그대로).
+  // 판마다 장면 순서를 바꿀 수 있으니 순서(i)가 아니라 컷으로 비트를 찾는다. 장면 첫 컷은 대본이 고른 컷 그대로 둔다.
   if (cur.scenes.length === sb.beats.length) {
+    const taken = new Set();
     for (const [i, sc] of cur.scenes.entries()) {
-      const want = sb.beats[i].shots || [];
-      if (!want.length) continue;
       const old = [refOf(sc.shot), ...(sc.extra_shots || []).map(refOf)];
+      let j = sb.beats.findIndex((b, jj) => !taken.has(jj) && (b.shots || []).some((r) => old.includes(r)));
+      if (j < 0) j = !taken.has(i) ? i : sb.beats.findIndex((_, jj) => !taken.has(jj));
+      if (j < 0) continue;
+      taken.add(j);
+      const shots = sb.beats[j].shots || [];
+      if (!shots.length) continue;
+      const want = shots.includes(old[0]) ? [old[0], ...shots.filter((r) => r !== old[0])] : shots;
       const caps = Array.isArray(sc.cut_captions) ? sc.cut_captions : [];
       const capOf = new Map(old.map((r, j) => [r, caps[j] ?? (j === 0 ? sc.cut_caption : sc.extra_shots?.[j - 1]?.caption)]));
       sc.shot = want[0];
