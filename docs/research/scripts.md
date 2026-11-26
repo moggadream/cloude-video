@@ -59,3 +59,20 @@
 - `shortform-voice` 스킬에 "대본 잘 쓰는 법" 섹션 (위 1~6).
 - `shortform-music` 스킬: 컷 글자에 소리 나는 말·숫자 쓰기.
 - 검사(lint): 장면 대부분이 "~요." / "~다."로 끝나면 경고 ("이어지는 말끝으로").
+
+## 오픈소스 스킬에서 가져온 것 (skills.sh 검색, 2026-11-26)
+설치하지 않고 문서만 읽었다. 그대로 옮기지 않고 우리 방식에 맞게 새로 썼다.
+
+| 스킬 | 가져온 것 |
+|---|---|
+| [melvynx/video-agent-skills `studio-script`](https://github.com/melvynx/video-agent-skills) (MIT) | 훅 후보 3개 + 5가지 점수(구체·궁금증·보는 사람·빠름·약속 지킴), 7점 미만은 버림. 가운데 다시 붙잡는 말(25초 넘을 때). 끝에 "봐 주셔서 감사해요"·요약 금지 |
+| [aaron-he-zhu/aaron-marketing-skills `short-video-scripter`](https://github.com/aaron-he-zhu/aaron-marketing-skills) (Apache-2.0) | 0~2초 훅 → **2~5초 증거** → 본론 → 끝. 훅이 약속한 걸 바로 보여 주는 장면이 대부분 대본에서 빠진다 |
+| [social-media-skills/skills `short-form-video-script`](https://github.com/social-media-skills/skills) (MIT) | 화면 글자·첫 화면·첫마디가 같은 약속을 가리키게 (따로 놀지 않게). 끝이 처음으로 이어지면 다시 본다 |
+| [daleseo/korean-skills `humanizer`](https://github.com/daleseo/korean-skills) (MIT) | 한국어 AI 글 특징: 쉼표 과다, 번역투(통해·에 대해·되어지다·가지고 있다), ~적 N, 대명사·"들" 남발 → `humanize-korean` 에 추가 |
+
+뺀 것: 영어권 "트리거 단어(secretly, revealed…)" 목록은 한국 맛집 영상 말투와 안 맞는다. 맛집·한국어 숏폼 전용 스킬은 찾지 못했다 (검색 결과 설치 수 10 미만).
+
+반영:
+- 대본 형식에 `hook_candidates` (후보 3개·점수·약한 점) 추가, 검사에서 최고 점수 7점 미만이면 경고.
+- 스토리보드 규칙: 두 번째 장면은 훅의 증거, 25초 넘으면 가운데 다시 붙잡기, 끝맺음에 "처음으로 돌아가는 말" 추가.
+- 검사: 끝맺음으로 "누구랑 가면 좋은지"·"강한 추천"도 인정 (전에는 팁·질문만).

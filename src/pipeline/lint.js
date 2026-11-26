@@ -100,7 +100,11 @@ export function lintOutput(key, out, plan, project) {
     const hookLines = String(out.hook || '').split('\n');
     if (!out.hook) add('error', '첫 화면 문구(hook)가 없음');
     if (/@/.test([out.hook, ...out.scenes.flatMap((s) => [s.caption, s.cut_caption, ...(s.cut_captions || []), ...(s.extra_shots || []).map((x) => x?.caption)])].join(' '))) add('error', '화면 글자에 @ 가 있음 (친구 태그 표현은 쓰지 않는다)');
-    else if (hookLines.some((l) => l.length > HOOK_LINE_MAX)) add('warn', `훅 한 줄이 ${HOOK_LINE_MAX}자 넘음: "${out.hook}"`);
+    // 훅 후보 점수 (구체·궁금증·보는 사람·빠름·약속 지킴, 10점 만점, 7점 이상만 쓴다)
+    const cands = (out.hook_candidates || []).filter((c) => c?.text);
+    const best = cands.length ? cands.reduce((a, b) => (Number(b.score) > Number(a.score) ? b : a)) : null;
+    if (best && Number(best.score) < 7) add('warn', `훅 후보가 모두 7점 미만 (최고 ${best.score}점, 약한 점: ${best.weak || '?'}). 숫자·동네·메뉴 이름을 넣고 짧게`);
+    if (out.hook && hookLines.some((l) => l.length > HOOK_LINE_MAX)) add('warn', `훅 한 줄이 ${HOOK_LINE_MAX}자 넘음: "${out.hook}"`);
     if (/^(안녕|오늘은|여러분)/.test(out.scenes[0]?.narration || '')) add('warn', '첫 나레이션이 인사/도입으로 시작 (훅이 약함)');
     // 인기 리뷰 쇼츠는 첫마디가 의견·반전·가격 ("절대 다시 안 가", "아직 안 죽었다"). 누구랑 언제 갔는지는 뒤로
     else if (key !== 'longform' && /^(동료|친구|가족|엄마|아빠|남편|아내|와이프|남친|여친|애들|아이|회사|오늘|어제|주말|퇴근|점심|저녁)/.test(out.scenes[0]?.narration || '')) {
@@ -138,14 +142,14 @@ export function lintOutput(key, out, plan, project) {
       // 말과 화면 맞추기: 컷이 여러 개인 장면은 구절 수 = 컷 수여야 컷이 구절 끝에서 바뀐다
       const off = out.scenes.map((s, i) => {
         const n = 1 + (s.extra_shots || []).length;
-        const c = String(s.narration || '').split(/(?<=[.,!?~…])s*/).filter((x) => x.replace(/[s.,!?~…]/g, '')).length;
+        const c = String(s.narration || '').split(/(?<=[.,!?~…])\s*/).filter((x) => x.replace(/[\s.,!?~…]/g, '')).length;
         return n >= 2 && c !== n ? `${i + 1}번(컷 ${n}개, 구절 ${c}개)` : '';
       }).filter(Boolean);
       if (off.length) add('warn', `컷 수와 나레이션 구절 수가 다른 장면: ${off.join(', ')}. 컷마다 그 컷에 보이는 것을 한 구절씩 (쉼표·마침표로 나눔)`);
       // 끝은 볼 사람에게 쓸모 있는 팁 한마디 (저장·방문으로 이어짐). 사실만 말하고 끝나면 영상이 뚝 끊긴 느낌
       const last = String(out.scenes.at(-1)?.narration || '');
-      if (last && !/[?？]\s*$/.test(last) && !/(세요|하면|면 돼|챙기|추천|꼭|피해|예약|팁|가 좋|게 좋|드셔|시키|노려|가시|오세|기억|저장|조심|주의|챙겨|가면|전에|마세요)/.test(last)) {
-        add('error', `마지막 나레이션이 팁 없이 끝남: "${last}". 마지막 장면은 팁 한마디나 댓글 질문으로 끝낸다 (예: "겉옷은 따로 챙기세요", "7시 전에 가면 바로 앉아요")`);
+      if (last && !/[?？]\s*$/.test(last) && !/(세요|하면|면 돼|챙기|추천|꼭|피해|예약|팁|가 좋|게 좋|드셔|시키|노려|가시|오세|기억|저장|조심|주의|챙겨|가면|전에|마세요|모시고|끼리|랑 가|하고 가|데이트|회식|혼밥|딱이|제일|최고|또 갈|또 올|다시 갈|재방문)/.test(last)) {
+        add('error', `마지막 나레이션이 팁 없이 끝남: "${last}". 마지막 장면은 실용 팁·누구랑 가면 좋은지·강한 추천 한마디·질문 중 하나로 끝낸다 (예: "겉옷은 따로 챙기세요", "회식 자리로 딱이에요", "요즘 먹은 고기 중에 제일")`);
       }
     }
     const norm = (x) => String(x || '').replace(/[\s\n.,!?~·]/g, '');
