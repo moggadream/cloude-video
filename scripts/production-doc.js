@@ -8,7 +8,7 @@ import { writeProductionDoc } from '../src/pipeline/production.js';
 const [id, ...want] = process.argv.slice(2);
 if (!id) { console.error('작업 ID를 주세요 (data/projects/ 아래 폴더 이름)'); process.exit(1); }
 const dir = projectDir(id);
-for (const key of want.length ? want : ['shorts', 'reels', 'tiktok', 'shorts_music', 'reels_music', 'tiktok_music', 'longform']) {
+for (const key of want.length ? want : ['shorts', 'reels', 'tiktok', 'naverclip', 'shorts_music', 'reels_music', 'tiktok_music', 'naverclip_music', 'longform']) {
   const doc = await writeProductionDoc({ project: await getProject(id), key, dir });
   if (!doc) { console.log(`- ${key}: 영상 없음 (또는 컷 정보 없는 옛 영상)`); continue; }
   await updateProject(id, (p) => { p.outputs[key].doc = doc; });

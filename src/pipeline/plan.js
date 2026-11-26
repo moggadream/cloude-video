@@ -9,7 +9,7 @@ import { speechText } from './speech.js';
 import { FRAMINGS, FRAMING_IDS, storyboardFor, storyboardGuide, scoreStoryboard, autoStoryboard, usableShots } from '../guides/storyboards.js';
 
 export const STORYBOARD_PASS = 75;
-const SHORT_BASES = ['shorts', 'reels', 'tiktok'];
+const SHORT_BASES = ['shorts', 'reels', 'tiktok', 'naverclip'];
 
 const SPEECH_NOTE = '## 영상 속 말소리 (자동 받아쓰기: 직원 설명·안내 방송·촬영자가 한 말)\n'
   + '- 화면에 없는 정보(메뉴 설명, 가격, 영업시간, 추천)가 있으면 사실로 써도 된다. 누가 한 말인지 모르면 "직원분이 ~래요"처럼 단정하지 말고 "~라고 하더라고요"로.\n'
@@ -33,6 +33,7 @@ const SHORTS = {
   shorts: { label: '유튜브 쇼츠', skill: 'youtube-shorts', type: 'video' },
   reels: { label: '인스타 릴스', skill: 'instagram-reels', type: 'video' },
   tiktok: { label: '틱톡', skill: 'tiktok', type: 'video' },
+  naverclip: { label: '네이버 클립', skill: 'naver-clip', type: 'video' },
 };
 export const PLATFORMS = {
   ...Object.fromEntries(Object.entries(SHORTS).map(([k, p]) => [k, { ...p, style: 'shortform-voice' }])),
@@ -328,7 +329,7 @@ function storyboardText(plan, key) {
       '- **이 영상은 말이 없다 (음악 + 글자)**. 인스타 인기 맛집 릴스의 절반이 이 형식. 모든 장면의 narration 은 빈 문자열("").',
       '- 컷 길이는 프로그램이 박자에 맞춰 정한다 (영상 컷 1.5초, 사진 컷 1초). 그러니 컷 수가 곧 영상 길이: 스토리보드 컷을 빠짐없이 쓴다.',
       '- **컷마다 화면 글자 한 줄**: 컷이 1개인 장면은 caption, 컷이 2개 이상이면 cut_captions 에 컷마다 (shot, extra_shots 순서). 각 **4~12자**, 그 컷에 보이는 것 + 맛·양·가격 한마디 ("두툼한 생삼겹", "육즙 가둔 겉바속촉"). 보는 사람이 1초 안에 읽는다.',
-      ({ shorts: '- hook(첫 화면 위쪽 큰 제목)은 숫자·결론 2줄 ("1인 1만원\n고기 무한"). 한 줄 10자 안팎.', reels: '- hook(첫 화면 위쪽 글자)은 짧은 반전·이유 한 줄: "여기 웨이팅 이유", "굽기 귀찮은 사람 여기". 12자 안팎. @ 는 쓰지 않는다.', tiktok: '- hook(위쪽에 고정되는 제목)은 가격 제목: "한우 등심 9,900원", "만원에 모둠회". 확인된 가격이 없으면 양·결론 한마디. 14자 안팎. 컷 글자는 메뉴 이름(+가격)을 나열.' })[baseKey(key)] || '',
+      ({ shorts: '- hook(첫 화면 위쪽 큰 제목)은 숫자·결론 2줄 ("1인 1만원\n고기 무한"). 한 줄 10자 안팎.', reels: '- hook(첫 화면 위쪽 글자)은 짧은 반전·이유 한 줄: "여기 웨이팅 이유", "굽기 귀찮은 사람 여기". 12자 안팎. @ 는 쓰지 않는다.', naverclip: '- hook(첫 화면 위쪽 제목)은 검색어 2줄: 첫 줄 동네·역 + 메뉴, 둘째 줄 결론·가격 ("역삼역 삼겹살\n직원이 다 구워줌"). 한 줄 10자 안팎. 마지막 컷 글자는 위치나 가기 전 팁.', tiktok: '- hook(위쪽에 고정되는 제목)은 가격 제목: "한우 등심 9,900원", "만원에 모둠회". 확인된 가격이 없으면 양·결론 한마디. 14자 안팎. 컷 글자는 메뉴 이름(+가격)을 나열.' })[baseKey(key)] || '',
       '- 마지막 컷 글자는 "여기가 어디" 정보: 가게 이름이나 동네·역 (예: "○○역 3번 출구 앞"). 가격·주차 같은 자세한 정보는 캡션(description)에.',
       '- 스토리보드에 없는 컷을 더하지 않는다. 같은 영상에서 8초 안쪽이거나 구도가 같은 장면은 함께 쓰지 않는다.',
       '- label 은 스토리보드의 이름표를 그대로. 이름표가 없는 비트는 빈칸.',
@@ -449,7 +450,7 @@ export async function makePlan(project, dir, onStep = () => {}) {
  */
 export const STAGE_A = ['shorts', 'longform', 'blog', 'threads'];
 export const STAGE_B = ['tiktok', 'carousel'];
-export const STAGE_C = ['reels']; // 쇼츠·틱톡을 다 보고 마지막에 (훅이 겹치지 않게)
+export const STAGE_C = ['reels', 'naverclip']; // 쇼츠·틱톡을 다 보고 마지막에 (훅이 겹치지 않게)
 export async function writeAll(project, plan, onDone = () => {}) {
   const run = (keys, siblings) => pool(keys, 3, async (k) => {
     plan[k] = await writePlatform(k, project, plan, siblings);
@@ -597,6 +598,7 @@ export function mockPlan(project) {
     shorts: sbVideo || video(`${name} 1분 소개`, `${name}\n가봤어요`, pick(8), `[예시 설명] ${name} 짧게 소개해요.`),
     reels: video(name, '여기 어디게?', pick(5, 1), `[예시 캡션] ${name} 다녀왔어요 ✨`, ['릴스']),
     tiktok: video(`${name} 실화?`, '이거 실화냐', pick(6, 1).reverse(), `[예시 캡션] ${name} 가본 사람?`, ['틱톡']),
+    naverclip: video(`${name} 가기 전에`, `${name}\n가기 전 체크`, pick(6, 2), `[예시 본문] ${name} 방문 정보`, ['네이버클립']),
     ...Object.fromEntries(MUSIC_KEYS.map((k) => [k, video(name, '여기 줄 서는 이유', pick(6, 2), `[예시 캡션] ${name} 말 없는 판`, [])])),
     longform: video(`${name} 자세히 둘러보기`, `${name} 투어`, shots, `[예시 설명] ${name}을 처음부터 끝까지 보여드려요.`, [], true),
     carousel: {
@@ -632,7 +634,7 @@ function withPlaceTag(tags, plan, max) {
   return has ? tags : [tag, ...tags].slice(0, max);
 }
 const cleanTags = (t, max = 30) => [...new Set((t || []).map((x) => String(x).replace(/^#+/, '').replace(/\s+/g, '').trim()).filter(Boolean))].slice(0, max);
-const TAG_MAX = { shorts: 5, reels: 5, tiktok: 5, longform: 5, carousel: 5, blog: 15 };
+const TAG_MAX = { shorts: 5, reels: 5, tiktok: 5, naverclip: 12, longform: 5, carousel: 5, blog: 15 };
 
 /**
  * AI 결과를 앱에서 쓰는 형태로 바꾸고 검증한다.

@@ -14,6 +14,7 @@ const LIMITS = {
   shorts: { sec: [15, 50], scenes: [5, 10], tags: 5 },
   reels: { sec: [8, 35], scenes: [3, 8], tags: 5 },
   tiktok: { sec: [12, 50], scenes: [4, 10], tags: 5 },
+  naverclip: { sec: [15, 59], scenes: [4, 10], tags: 12 },
   longform: { sec: [60, 900], scenes: [6, 80], tags: 5 },
   carousel: { slides: [5, 10], tags: 5 },
   threads: { chars: [80, 500] },
@@ -46,7 +47,7 @@ export function knownNumbers(plan, project) {
 /** 이 결과물의 모든 글 (검사용) */
 export function allText(key, out) {
   if (!out) return '';
-  if (['shorts', 'reels', 'tiktok', 'longform'].includes(baseKey(key))) {
+  if (['shorts', 'reels', 'tiktok', 'naverclip', 'longform'].includes(baseKey(key))) {
     return [out.title, out.hook, out.description, ...out.scenes.flatMap((s) => [s.narration, s.caption, s.price_tag])].join('\n');
   }
   if (key === 'carousel') return [out.caption, ...out.slides.flatMap((s) => [s.headline, s.body])].join('\n');
@@ -148,7 +149,7 @@ export function lintOutput(key, out, plan, project) {
       if (off.length) add('warn', `컷 수와 나레이션 구절 수가 다른 장면: ${off.join(', ')}. 컷마다 그 컷에 보이는 것을 한 구절씩 (쉼표·마침표로 나눔)`);
       // 끝은 볼 사람에게 쓸모 있는 팁 한마디 (저장·방문으로 이어짐). 사실만 말하고 끝나면 영상이 뚝 끊긴 느낌
       const last = String(out.scenes.at(-1)?.narration || '');
-      if (last && !/[?？]\s*$/.test(last) && !/(세요|하면|면 돼|챙기|추천|꼭|피해|예약|팁|가 좋|게 좋|드셔|시키|노려|가시|오세|기억|저장|조심|주의|챙겨|가면|전에|마세요|모시고|끼리|랑 가|하고 가|데이트|회식|혼밥|딱이|제일|최고|또 갈|또 올|다시 갈|재방문)/.test(last)) {
+      if (last && !/[?？]\s*$/.test(last) && !/(세요|하면|면 돼|챙기|추천|꼭|피해|예약|팁|가 좋|게 좋|드셔|시키|노려|가시|오세|기억|저장|조심|주의|챙겨|가면|전에|마세요|따로|웨이팅|주차|모시고|끼리|랑 가|하고 가|데이트|회식|혼밥|딱이|제일|최고|또 갈|또 올|다시 갈|재방문)/.test(last)) {
         add('error', `마지막 나레이션이 팁 없이 끝남: "${last}". 마지막 장면은 실용 팁·누구랑 가면 좋은지·강한 추천 한마디·질문 중 하나로 끝낸다 (예: "겉옷은 따로 챙기세요", "회식 자리로 딱이에요", "요즘 먹은 고기 중에 제일")`);
       }
     }

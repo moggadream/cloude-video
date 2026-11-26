@@ -12,6 +12,8 @@ export const FORMATS = {
   reels: { label: '인스타그램 릴스', w: 1080, h: 1920, maxTotal: 90, minScene: 1.5, maxScene: 6, captionMargin: 460, short: true },
   // 틱톡은 오른쪽 버튼·아래쪽 캡션이 화면을 가려서 글자를 더 안쪽·위쪽에 둔다
   tiktok: { label: '틱톡', w: 1080, h: 1920, maxTotal: 90, minScene: 1.5, maxScene: 6, short: true, captionMargin: 600, marginL: 70, marginR: 190 },
+  // 네이버 클립은 아래쪽에 본문·버튼이 겹쳐서 글자를 조금 위로
+  naverclip: { label: '네이버 클립', w: 1080, h: 1920, maxTotal: 59, minScene: 1.5, maxScene: 6, short: true, captionMargin: 520, marginR: 150 },
   longform: { label: '유튜브 롱폼', w: 1920, h: 1080, maxTotal: 1800, minScene: 3.5, maxScene: 20, captionMargin: 90 },
 };
 

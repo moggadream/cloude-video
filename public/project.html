@@ -27,8 +27,8 @@
 import { api, $, h, toast, copyText, STATUS, APPROVAL, pill, showLogin } from '/common.js';
 
 const id = new URLSearchParams(location.search).get('id');
-let KEYS = ['shorts', 'reels', 'tiktok', 'longform', 'carousel', 'threads', 'blog'];
-let VIDEO = new Set(['shorts', 'reels', 'tiktok', 'longform']);
+let KEYS = ['shorts', 'reels', 'tiktok', 'naverclip', 'longform', 'carousel', 'threads', 'blog'];
+let VIDEO = new Set(['shorts', 'reels', 'tiktok', 'naverclip', 'longform']);
 let status, project, current = 'shorts', dirty = false, sig = '';
 
 const file = (area, name) => `/files/${id}/${area}/${name}`;
@@ -201,7 +201,7 @@ function textFields(k, o, { title = true, limit } = {}) {
   return [
     title ? h('label', { class: 'f', for: 'f_title' }, '제목') : null,
     title ? h('input', { type: 'text', id: 'f_title', value: o.title || '', oninput: () => { dirty = true; } }) : null,
-    h('label', { class: 'f', for: 'f_body' }, ['reels', 'tiktok', 'carousel'].includes(k.replace(/_music$/, '')) ? '캡션' : k === 'threads' ? '글' : k === 'blog' ? '본문 ([사진: m1] 자리에 사진이 들어가요)' : '설명'),
+    h('label', { class: 'f', for: 'f_body' }, ['reels', 'tiktok', 'carousel'].includes(k.replace(/_music$/, '')) ? '캡션' : k.startsWith('naverclip') ? '본문' : k === 'threads' ? '글' : k === 'blog' ? '본문 ([사진: m1] 자리에 사진이 들어가요)' : '설명'),
     body,
     h('div', { class: 'row', style: 'justify-content:space-between;margin-top:6px' }, count,
       h('button', { class: 'small', onclick: () => saveText(k).catch((e) => toast(e.message)) }, '💾 저장')),
@@ -227,7 +227,7 @@ function renderPanel() {
       v ? usageInfo(k, v) : null,
       v ? h('p', { class: 'muted' }, `${Math.floor(v.duration / 60)}분 ${Math.round(v.duration % 60)}초 · ${v.width}×${v.height} · 나레이션 ${v.voice ? '있음' : '없음(키 필요)'} · 음악 ${v.music === 'ai' ? 'AI 작곡' : '임시 음악'}`) : null,
       approvalBlock(k, o),
-      ...textFields(k, o, { title: !['reels', 'tiktok'].includes(k.replace(/_music$/, '')), limit: k.startsWith('reels') ? 2200 : k.startsWith('tiktok') ? 4000 : 5000 }),
+      ...textFields(k, o, { title: !['reels', 'tiktok', 'naverclip'].includes(k.replace(/_music$/, '')), limit: k.startsWith('reels') ? 2200 : k.startsWith('tiktok') ? 4000 : 5000 }),
       h('div', { class: 'actions' },
         ...approveButtons(k, o),
         v ? h('a', { class: 'btn', href: file('out', v.file), download: `${k}.mp4` }, '⬇ 영상 받기') : null,

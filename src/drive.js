@@ -151,6 +151,8 @@ const FILE_NAMES = {
   shorts_music: '1_유튜브쇼츠_말없음.mp4',
   reels_music: '2_인스타릴스_말없음.mp4',
   tiktok_music: '3_틱톡_말없음.mp4',
+  naverclip: '5_네이버클립.mp4',
+  naverclip_music: '5_네이버클립_말없음.mp4',
   longform: '4_유튜브롱폼.mp4',
 };
 

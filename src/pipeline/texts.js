@@ -48,6 +48,7 @@ export function textFor(key, plan, extra = {}) {
       return { title: s.title.slice(0, 100), body: longformBody(s, extra.chapters) };
     case 'reels':
     case 'tiktok':
+    case 'naverclip':
       return { title: '', body: [s.description.trim(), tagLine(s.hashtags)].filter(Boolean).join('\n\n') };
     case 'carousel':
       return { title: '', body: [s.caption.trim(), tagLine(s.hashtags)].filter(Boolean).join('\n\n') };

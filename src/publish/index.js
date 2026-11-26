@@ -10,6 +10,8 @@ export const PLATFORMS = {
   shorts_music: { name: 'YouTube', auto: false, note: '유튜브 계정 연결 후 자동 업로드 (2단계)' },
   reels_music: { name: 'Instagram', auto: false, note: '인스타그램 비즈니스 계정 연결 후 자동 업로드 (2단계)' },
   tiktok_music: { name: 'TikTok', auto: false, note: '틱톡 계정 연결 후 자동 업로드 (2단계)' },
+  naverclip: { name: '네이버 클립', auto: false, note: '네이버 클립은 자동 업로드가 없어 앱에서 직접 올리기 (올릴 때 장소 연결)' },
+  naverclip_music: { name: '네이버 클립', auto: false, note: '네이버 클립은 자동 업로드가 없어 앱에서 직접 올리기 (올릴 때 장소 연결)' },
   carousel: { name: 'Instagram', auto: false, note: '인스타그램 비즈니스 계정 연결 후 자동 업로드 (2단계)' },
   threads: { name: 'Threads', auto: false, note: '쓰레드 계정 연결 후 자동 게시 (2단계)' },
   blog: { name: '블로그', auto: false, note: '네이버 블로그는 자동 게시 API가 없어 복사해서 붙여넣기' },

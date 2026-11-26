@@ -69,7 +69,7 @@ export async function processProject(id, opts = {}) {
     await exportBlogImages(project, dir);
 
     // 4) 영상·캐러셀
-    const weight = { shorts: 0.1, reels: 0.08, tiktok: 0.08, longform: 0.24, carousel: 0.05 };
+    const weight = { shorts: 0.1, reels: 0.08, tiktok: 0.08, naverclip: 0.08, longform: 0.24, carousel: 0.05 };
     let base = 0.42;
     for (const key of RENDER_KEYS) {
       const w = weight[baseKey(key)] || 0.05;
