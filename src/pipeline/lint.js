@@ -99,6 +99,7 @@ export function lintOutput(key, out, plan, project) {
     if (longCaps.length) add('warn', `화면 자막이 긴 장면 ${longCaps.length}개 (${CAPTION_MAX}자 넘음): "${longCaps[0].caption}"`);
     const hookLines = String(out.hook || '').split('\n');
     if (!out.hook) add('error', '첫 화면 문구(hook)가 없음');
+    if (/@/.test([out.hook, ...out.scenes.flatMap((s) => [s.caption, s.cut_caption, ...(s.cut_captions || []), ...(s.extra_shots || []).map((x) => x?.caption)])].join(' '))) add('error', '화면 글자에 @ 가 있음 (친구 태그 표현은 쓰지 않는다)');
     else if (hookLines.some((l) => l.length > HOOK_LINE_MAX)) add('warn', `훅 한 줄이 ${HOOK_LINE_MAX}자 넘음: "${out.hook}"`);
     if (/^(안녕|오늘은|여러분)/.test(out.scenes[0]?.narration || '')) add('warn', '첫 나레이션이 인사/도입으로 시작 (훅이 약함)');
     // 인기 리뷰 쇼츠는 첫마디가 의견·반전·가격 ("절대 다시 안 가", "아직 안 죽었다"). 누구랑 언제 갔는지는 뒤로
@@ -130,6 +131,10 @@ export function lintOutput(key, out, plan, project) {
     if (key !== 'longform' && !silent) {
       const silent = out.scenes.map((s, i) => (String(s.narration || '').trim() ? 0 : i + 1)).filter(Boolean);
       if (silent.length) add('error', `나레이션이 없는 장면: ${silent.join(', ')}번. 숏폼은 끝까지 쉬지 않고 말한다 (마지막 장면도 팁 한마디)`);
+      // 인기 맛집 영상은 장면 끝을 이어지는 말끝(~인데, ~고, ~까지)으로 맺는다. 장면마다 '~요.'로 끊으면 멈추는 느낌 (docs/research/scripts.md)
+      const mids = out.scenes.slice(0, -1).map((s) => String(s.narration || '').trim()).filter(Boolean);
+      const stops = mids.filter((n) => /(요|다|죠|니다)[.!]?$/.test(n) && !/[?]$/.test(n)).length;
+      if (mids.length >= 3 && stops / mids.length > 0.5) add('warn', `장면 ${mids.length}개 중 ${stops}개가 "~요."로 끝남. 이어지는 말끝(~인데, ~고, ~까지)으로 다음 장면에 넘긴다`);
       // 말과 화면 맞추기: 컷이 여러 개인 장면은 구절 수 = 컷 수여야 컷이 구절 끝에서 바뀐다
       const off = out.scenes.map((s, i) => {
         const n = 1 + (s.extra_shots || []).length;
